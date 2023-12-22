@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Created on Fri Dec 22 10:08:57 2023
 
-This is a temporary script file.
+@author: swan0
 """
 import h2o
 from h2o.estimators.gbm import H2OGradientBoostingEstimator 
@@ -24,27 +24,28 @@ warnings.simplefilter(action='ignore', category=Warning)
 class nfl_model_class():
     def __init__(self, nfl_week):
 
-        # model setup
-        project_path = r"C:\Users\swan0\Desktop\sdswans\python\model"
+        # start runtime
+        start_run = time.time()
+
+        # set weekly odds to predict
         self.nfl_week = nfl_week
-        self.script_setup()
 
         # import nfl data past 22 years
-        self.all_data_df = self.import_games()
+        self.nfl_df = self.import_games()
 
         # import quarterback data for 2023 
-        self.qbs_2023 = self.import_quarterbacks()
+        self.quarterbacks_df = self.import_quarterbacks()
 
         # import rookie data
-        self.draft = self.import_rookies()
+        self.rookies_df = self.import_rookies()
 
         # import nfl schedule data
-        self.nfl_schedules = self.import_schedules()
+        self.schedules_df = self.import_schedules()
 
-
-    def script_setup(self):
-        self.qb_update_csv = rf"{project_path}\qb_update_2023.csv"
-        self.weekly_odds_csv = rf"{project_path}\week_{nfl_week}.csv"
+        # end runtime
+        end_run = time.time()
+        end_run = (end_run - start_run)/60
+        print("nfl_model.py runtime: " + str(end_run) + " minutes.")
 
 
     def import_games(self):
