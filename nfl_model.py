@@ -70,6 +70,17 @@ class prep_data_class():
         # create close game data 
         self.close_gm_df = self.clean_data(import_obj.nfl_df, range(2016,2022))
 
+        # calculate cumulative epa
+        self.sum_epa_df = self.sum_epa(self.close_gm_df, "posteam")
+        self.sum_epa_allowed_df = self.sum_epa(self.close_gm_df, "defteam")
+
+        # calcuate per season epa
+        self.seas_epa_df = self.season_epa(self.close_gm_df)
+        self.seas_epa_allowed_df = self.season_epa(self.close_gm_df)
+
+        # pull qb data for passing value calculation
+        self.qb_data_df = self.clean_data(import_obj.nfl_df, range(2021,2023))
+
         # end runtime
         end_run = time.time()
         end_run = (end_run - start_run)/60
@@ -88,9 +99,9 @@ class prep_data_class():
         
         # drop columns 
         clean_df = clean_df.drop(columns=['nflverse_game_id', 'possession_team','offense_formation', 
-                                        'offense_personnel', 'defenders_in_box','defense_personnel',
-                                        'number_of_pass_rushers', 'players_on_play', 'offense_players',
-                                        'defense_players','n_offense', 'n_defense'])
+                                          'offense_personnel', 'defenders_in_box','defense_personnel',
+                                          'number_of_pass_rushers', 'players_on_play', 'offense_players',
+                                          'defense_players','n_offense', 'n_defense'])
         
         # exclude playoffs, qb_kneel, qb_spike
         clean_df = clean_df[clean_df['season_type'] == 'REG']
@@ -106,18 +117,48 @@ class prep_data_class():
         clean_df['blow_out'] = np.where((clean_df['qtr'] > 2) & (abs(clean_df['current_score_differential'])
                                                                  > 27.5), 1, clean_df['blow_out'])
         
-        # filter out nans 
+        # identify nan values by quarter
         clean_df['nans_3_qtr'] = np.where((clean_df['qtr'] == 3) &
                                            clean_df['current_score_differential'].isnull(), 1, 0)
         clean_df['nans_4_qtr'] = np.where((clean_df['qtr'] == 4) & 
                                            clean_df['current_score_differential'].isnull(), 1, 0)
         clean_df['nans_5_qtr'] = np.where((clean_df['qtr'] == 5) & 
                                            clean_df['current_score_differential'].isnull(), 1, 0)
+        
+        # set blanks to zero
         clean_df = clean_df[clean_df['nans_3_qtr'] == 0]
         clean_df = clean_df[clean_df['nans_4_qtr'] == 0]
         clean_df = clean_df[clean_df['nans_5_qtr'] == 0]
         clean_df = clean_df[clean_df['blow_out'] == 0]
+
+        # drop columns
         clean_df = clean_df.drop('nans_3_qtr', axis=1)
         clean_df = clean_df.drop('nans_4_qtr', axis=1)
         clean_df = clean_df.drop('nans_5_qtr', axis=1)
         return clean_df
+    
+    
+    def sum_epa(self, nfl_df, pos_side):
+        if pos_side == "posteam":
+            columns = ['passer_player_id', 'passer_player_name', 'posteam', 'qb_sum_epa']
+        if pos_side == "defteam":
+            columns = ['passer_player_id', 'passer_player_name', 'posteam', 'defteam','qb_sum_epa']
+        df = nfl_df.groupby(['passer_player_id', 'passer_player_name']) \
+                   .apply(lambda x: x.assign(qb_sum_epa = x['qb_epa'].sum())) \
+                   .reset_index(drop=True) \
+                   .loc[:, columns] \
+                   .dropna(subset=['passer_player_name']) \
+                   .drop_duplicates() \
+                   .dropna() 
+        return df
+    
+
+    def season_epa(self, nfl_df):
+        df = nfl_df.groupby(['passer_player_id', 'season']) \
+                   .apply(lambda x: x.assign(qb_sum_epa = x['qb_epa'].sum())) \
+                   .reset_index(drop=True) \
+                   .loc[:, ['season','passer_player_id','passer_player_name','posteam','qb_sum_epa']] \
+                   .dropna(subset=['passer_player_name']) \
+                   .drop_duplicates() \
+                   .dropna()
+        return df
