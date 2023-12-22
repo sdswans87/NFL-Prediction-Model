@@ -1,1 +1,1 @@
-National Football League NFL Python Model.
+National Football League - Python Model.
