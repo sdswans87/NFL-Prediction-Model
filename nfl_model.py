@@ -179,7 +179,7 @@ class prep_data_class():
         passers = passers.groupby('IDs').size().reset_index(name='passes_thrown')
         
         # filter less than 100 completions
-        passers = passers[passers['passes_thrown'] > 100]
+        passers = passers[passers['passes_thrown'] > 50]
         passers = passers.drop(columns=['passes_thrown'])
         passers = passers.drop_duplicates()
     
@@ -196,7 +196,7 @@ class prep_data_class():
         out2 = out.groupby(['game_id', 'passer_player_id', 'passer_player_name', 'posteam', 
                             'season', 'week']).agg(qb_sum_epa=('epa', 'sum')).reset_index()
         out2 = out2[~out2['passer_player_name'].isna()].drop_duplicates()
-        
+
         # count qb games played
         qb_count = out2.groupby('passer_player_id').size().reset_index(name='game_count')
         out2['game_count'] = out2['passer_player_id'].map(qb_count.set_index('passer_player_id')['game_count'])
