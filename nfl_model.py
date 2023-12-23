@@ -81,6 +81,12 @@ class prep_data_class():
         # pull qb data for passing value calculation
         self.qb_data_df = self.clean_data(import_obj.nfl_df, range(2021,2023))
 
+        # adjust for qb passing value
+        self.qb_value_df = self.qb_value_adjustment(self.qb_data_df)
+
+        # calculate qb points ratings
+        self.qb_ratings_df = self.calc_qb_ratings(self.qb_value_df)
+
         # end runtime
         end_run = time.time()
         end_run = (end_run - start_run)/60
@@ -162,3 +168,66 @@ class prep_data_class():
                    .drop_duplicates() \
                    .dropna()
         return df
+    
+
+    def qb_value_adjustment(self, nfl_df):
+        
+        # create passers dataframe
+        passers = pd.DataFrame(nfl_df['passer_player_id'])
+        passers.columns = ['IDs']
+        passers = passers[~passers['IDs'].isna()]
+        passers = passers.groupby('IDs').size().reset_index(name='passes_thrown')
+        
+        # filter less than 100 completions
+        passers = passers[passers['passes_thrown'] > 100]
+        passers = passers.drop(columns=['passes_thrown'])
+        passers = passers.drop_duplicates()
+    
+        # set pass/run dataframes
+        pass_df = nfl_df[nfl_df['play_type'] == 'pass']
+        run_df = nfl_df[(nfl_df['play_type'] == 'run') & (nfl_df['rusher_player_id'].isin(passers['IDs']))]
+    
+        # concat pass/run
+        out = pd.concat([pass_df, run_df])
+        out['passer_player_id'] = np.where(out['play_type'] == 'run', out['rusher_player_id'], 
+                                           out['passer_player_id'])
+        
+        # create qb epa
+        out2 = out.groupby(['game_id', 'passer_player_id', 'passer_player_name', 'posteam', 
+                            'season', 'week']).agg(qb_sum_epa=('epa', 'sum')).reset_index()
+        out2 = out2[~out2['passer_player_name'].isna()].drop_duplicates()
+        
+        # count qb games played
+        qb_count = out2.groupby('passer_player_id').size().reset_index(name='game_count')
+        out2['game_count'] = out2['passer_player_id'].map(qb_count.set_index('passer_player_id')['game_count'])
+
+        # create team epa
+        out3 = out.groupby(['game_id','posteam','season','week']).agg(team_qb_epa=('epa','sum')).reset_index()
+        out3 = out3.drop_duplicates()
+        return [out2, out3]
+    
+
+    def calc_qb_ratings(self, quarterback_df): 
+
+        # groupby passer player id
+        qb_n = quarterback_df[0].groupby('passer_player_id').size().reset_index(name='games')
+
+        # create qb list 
+        qb_list = pd.DataFrame({'passer_player_id': quarterback_df[0]['passer_player_id'].unique()})
+        qb_list.columns = ['passer_player_id']
+        qb_list = qb_list.merge(qb_n, on='passer_player_id', how='left')
+        qb_list.columns = ['passer_player_id', 'games']
+        qb_list = qb_list[qb_list['games'] >= 4]
+
+        # calculate qb rankings
+        player_ids = qb_list["passer_player_id"].unique()
+        out = pd.DataFrame()
+        for temp_ids in player_ids:
+            df2 = quarterback_df[0][quarterback_df[0]['passer_player_id'] == temp_ids]
+            df2 = df2.tail(17)
+            x = min(15, len(df2) - 2)
+            df2['wt_avg'] = df2["qb_sum_epa"].rolling(x).mean()
+            # df2['wt_avg'] = df2["qb_sum_epa"].transform(lambda x: x.rolling(window=x_window, min_periods=1).mean().shift())
+            out = out.append(df2.tail(1))
+        out = out[['posteam', 'passer_player_id', 'passer_player_name', 'wt_avg']]
+        return out
