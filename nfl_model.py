@@ -20,43 +20,42 @@ import time
 import warnings
 warnings.simplefilter(action='ignore', category=Warning)
 
-
 class import_data_class():
     def __init__(self):
 
         # start runtime
         start_run = time.time()
 
-        # import nfl data past 22 years
-        self.nfl_df = self.import_games()
+        # import nfl data past 20 years
+        self.nfl_df = self.import_games_func()
 
         # import quarterback data for 2023 
-        self.quarterbacks_df = self.import_quarterbacks()
+        self.quarterbacks_df = self.import_qb_func()
 
         # import rookie data
-        self.rookies_df = self.import_rookies()
+        self.rookies_df = self.import_rookies_func()
 
         # import nfl schedule data
-        self.schedules_df = self.import_schedules()
+        self.schedules_df = self.import_schedules_func()
 
         # end runtime
         end_run = time.time()
         end_run = (end_run - start_run)/60
         print("import data runtime: " + str(end_run) + " minutes.")
 
-    def import_games(self):
-        df = nfl.import_pbp_data(range(2002,2024))
+    def import_games_func(self):
+        df = nfl.import_pbp_data(range(2003,2023))
         return df
     
-    def import_quarterbacks(self):
+    def import_qb_func(self):
         df = nfl.import_players()
         return df
 
-    def import_rookies(self):
+    def import_rookies_func(self):
         df = nfl.import_draft_picks()
         return df
     
-    def import_schedules(self):
+    def import_schedules_func(self):
         df = nfl.import_schedules(range(2002, 2024))
         return df
     
@@ -68,24 +67,27 @@ class prep_data_class():
         start_run = time.time()
 
         # create close game data 
-        self.close_gm_df = self.clean_data(import_obj.nfl_df, range(2016,2022))
+        self.game_data_df = self.clean_data_func(import_obj.nfl_df, range(2016,2024))
 
-        # calculate cumulative epa
-        self.sum_epa_df = self.sum_epa(self.close_gm_df, "posteam")
-        self.sum_epa_allowed_df = self.sum_epa(self.close_gm_df, "defteam")
+        # calculate game epa
+        self.game_epa_df = self.sum_epa_func(self.game_data_df, "posteam")
+        self.game_epa_allowed_df = self.sum_epa_func(self.game_data_df, "defteam")
 
-        # calcuate per season epa
-        self.seas_epa_df = self.season_epa(self.close_gm_df)
-        self.seas_epa_allowed_df = self.season_epa(self.close_gm_df)
+        # calcuate season epa
+        self.seas_epa_df = self.season_epa_func(self.game_data_df)
+        self.seas_epa_allowed_df = self.season_epa_func(self.game_data_df)
 
-        # pull qb data for passing value calculation
-        self.qb_data_df = self.clean_data(import_obj.nfl_df, range(2021,2023))
-
-        # adjust for qb passing value
-        self.qb_value_df = self.qb_value_adjustment(self.qb_data_df)
+        # adjust for passing value
+        self.epa_value_list = self.qb_value_adj_func(import_obj.nfl_df, range(2021,2024))
 
         # calculate qb points ratings
-        self.qb_ratings_df = self.calc_qb_ratings(self.qb_value_df)
+        self.qb_rankings_df = self.qb_ranking_func(self.epa_value_list)
+
+        # active qbs
+        self.active_qbs_df = self.active_qb_func(import_obj.quarterbacks_df)
+
+        # identify starting qbs
+        self.qb_one_df = self.qb_one_func(self.active_qbs_df, self.qb_rankings_df)
 
         # end runtime
         end_run = time.time()
@@ -93,7 +95,7 @@ class prep_data_class():
         print("prep data runtime: " + str(end_run) + " minutes.")
 
 
-    def clean_data(self, nfl_df, nfl_range): 
+    def clean_data_func(self, nfl_df, nfl_range): 
         
         # filter to selected seasons 
         clean_df = nfl_df.loc[(nfl_df['season'] >= min(nfl_range)) & 
@@ -122,29 +124,10 @@ class prep_data_class():
                                                                   > 13.5), 1, 0)
         clean_df['blow_out'] = np.where((clean_df['qtr'] > 2) & (abs(clean_df['current_score_differential'])
                                                                  > 27.5), 1, clean_df['blow_out'])
-        
-        # identify nan values by quarter
-        clean_df['nans_3_qtr'] = np.where((clean_df['qtr'] == 3) &
-                                           clean_df['current_score_differential'].isnull(), 1, 0)
-        clean_df['nans_4_qtr'] = np.where((clean_df['qtr'] == 4) & 
-                                           clean_df['current_score_differential'].isnull(), 1, 0)
-        clean_df['nans_5_qtr'] = np.where((clean_df['qtr'] == 5) & 
-                                           clean_df['current_score_differential'].isnull(), 1, 0)
-        
-        # set blanks to zero
-        clean_df = clean_df[clean_df['nans_3_qtr'] == 0]
-        clean_df = clean_df[clean_df['nans_4_qtr'] == 0]
-        clean_df = clean_df[clean_df['nans_5_qtr'] == 0]
-        clean_df = clean_df[clean_df['blow_out'] == 0]
-
-        # drop columns
-        clean_df = clean_df.drop('nans_3_qtr', axis=1)
-        clean_df = clean_df.drop('nans_4_qtr', axis=1)
-        clean_df = clean_df.drop('nans_5_qtr', axis=1)
         return clean_df
     
-    
-    def sum_epa(self, nfl_df, pos_side):
+
+    def sum_epa_func(self, nfl_df, pos_side):
         if pos_side == "posteam":
             columns = ['passer_player_id', 'passer_player_name', 'posteam', 'qb_sum_epa']
         if pos_side == "defteam":
@@ -159,7 +142,7 @@ class prep_data_class():
         return df
     
 
-    def season_epa(self, nfl_df):
+    def season_epa_func(self, nfl_df):
         df = nfl_df.groupby(['passer_player_id', 'season']) \
                    .apply(lambda x: x.assign(qb_sum_epa = x['qb_epa'].sum())) \
                    .reset_index(drop=True) \
@@ -170,10 +153,13 @@ class prep_data_class():
         return df
     
 
-    def qb_value_adjustment(self, nfl_df):
+    def qb_value_adj_func(self, nfl_df, nfl_range):
         
+        # clean qb data
+        qb_df = self.clean_data_func(nfl_df, nfl_range)
+
         # create passers dataframe
-        passers = pd.DataFrame(nfl_df['passer_player_id'])
+        passers = pd.DataFrame(qb_df['passer_player_id'])
         passers.columns = ['IDs']
         passers = passers[~passers['IDs'].isna()]
         passers = passers.groupby('IDs').size().reset_index(name='passes_thrown')
@@ -184,8 +170,8 @@ class prep_data_class():
         passers = passers.drop_duplicates()
     
         # set pass/run dataframes
-        pass_df = nfl_df[nfl_df['play_type'] == 'pass']
-        run_df = nfl_df[(nfl_df['play_type'] == 'run') & (nfl_df['rusher_player_id'].isin(passers['IDs']))]
+        pass_df = qb_df[qb_df['play_type'] == 'pass']
+        run_df = qb_df[(qb_df['play_type'] == 'run') & (qb_df['rusher_player_id'].isin(passers['IDs']))]
     
         # concat pass/run
         out = pd.concat([pass_df, run_df])
@@ -207,7 +193,7 @@ class prep_data_class():
         return [out2, out3]
     
 
-    def calc_qb_ratings(self, quarterback_df): 
+    def qb_ranking_func(self, quarterback_df): 
 
         # groupby passer player id
         qb_n = quarterback_df[0].groupby('passer_player_id').size().reset_index(name='games')
@@ -231,3 +217,22 @@ class prep_data_class():
             out = out.append(df2.tail(1))
         out = out[['posteam', 'passer_player_id', 'passer_player_name', 'wt_avg']]
         return out
+    
+
+    def active_qb_func(self, players_df):
+        qbs_2023 = players_df[players_df['status'] == "ACT"]
+        qbs_2023 = qbs_2023[qbs_2023['position'] == 'QB']
+        qbs_2023 = qbs_2023[(qbs_2023['status'] == 'ACT') | (qbs_2023['status'] == 'INA')]
+        qbs_2023 = qbs_2023[['status', 'team_abbr', 'position', 'first_name', 'last_name', 'gsis_id']]
+        qbs_2023.rename(columns={'gsis_id': 'passer_player_id'}, inplace=True)
+        return qbs_2023
+    
+
+    def qb_one_func(self, quarterback_df, rankings_df):
+        df = pd.merge(quarterback_df, rankings_df, on='passer_player_id', how='left')
+        df = df.dropna(subset=['wt_avg'])
+        df = df.drop(columns=['position'])
+        df = df.reset_index(drop=True)
+        qb_starters = df.drop([0,3,4,5,6,8,9,11,13,21,24,27,31,35,36,37,39,42,46,47,48,50,51,52,55,57])
+        qb_starters.rename(columns={'team_abbr': 'team'}, inplace=True)
+        return qb_starters
