@@ -77,17 +77,41 @@ class prep_data_class():
         self.seas_epa_df = self.season_epa_func(self.game_data_df)
         self.seas_epa_allowed_df = self.season_epa_func(self.game_data_df)
 
-        # adjust for passing value
+        # epa passing value
         self.epa_value_list = self.qb_value_adj_func(import_obj.nfl_df, range(2021,2024))
 
-        # calculate qb points ratings
+        # calc qb rankings
         self.qb_rankings_df = self.qb_ranking_func(self.epa_value_list)
 
-        # active qbs
+        # create active qbs
         self.active_qbs_df = self.active_qb_func(import_obj.quarterbacks_df)
 
-        # identify starting qbs
+        # create starting qbs 
         self.qb_one_df = self.qb_one_func(self.active_qbs_df, self.qb_rankings_df)
+
+        # create qbs by team
+        self.team_epa_df = self.team_epa_func(self.epa_value_list[1])
+
+        # rookie impact
+        self.first_rd_qb_df = self.first_rd_qb_func(import_obj.rookies_df)  
+
+        # rookie pass value
+        self.rookie_pass_df = self.rookie_pass_func(import_obj.nfl_df, self.first_rd_qb_df)
+
+        # rookie run value
+        self.rookie_run_df = self.rookie_run_func(import_obj.nfl_df, self.first_rd_qb_df)
+
+        # rookie play value
+        self.rookie_play_df = self.rookie_play_func(self.rookie_pass_df, self.rookie_run_df)
+
+        # rookie season epa
+        self.rookie_epa_df = self.rookie_epa_func(self.first_rd_qb_df, self.rookie_play_df)
+
+        # rookie average epa
+        self.rookie_mean_df = self.rookie_mean_func(self.rookie_epa_df)
+        
+        # compare qb value vs actual production
+        self.qb_adj_df = self.qb_adj_func(self.team_epa_df, self.qb_one_df, self.rookie_mean_df)
 
         # end runtime
         end_run = time.time()
@@ -233,6 +257,86 @@ class prep_data_class():
         df = df.dropna(subset=['wt_avg'])
         df = df.drop(columns=['position'])
         df = df.reset_index(drop=True)
-        qb_starters = df.drop([0,3,4,5,6,8,9,11,13,21,24,27,31,35,36,37,39,42,46,47,48,50,51,52,55,57])
-        qb_starters.rename(columns={'team_abbr': 'team'}, inplace=True)
-        return qb_starters
+        qb_ones = df.drop([15,27,57,31,8,11,55,51,13,37,47,4,9,6,39,48,34,21,50,52,58,36,3,30,16,5,46,24,35,19])
+        qb_ones.rename(columns={'team_abbr': 'team'}, inplace=True)
+        rookie_dict = {"status":["ACT", "ACT", "ACT", "ACT", "ACT"],
+                       "team":["CAR", "CIN", "HOU", "NYG", "WAS"],
+                       "first_name":["Bryce", "Jake", "CJ", "Tommy", "Sam"],
+                       "last_name":["Young", "Browning", "Stroud", "Devito", "Howell"],
+                       "passer_player_id":["00-0039150", "00-0035100", "00-0039163", "00-0038476", "00-0037077"],
+                       "posteam":["CAR", "CIN", "HOU", "NYG", "WAS"],
+                       "passer_player_name":["B.Young", "J.Browning", "C.Stroud", "T.Devito", "S.Howell"],
+                       "wt_avg":[0,0,0,0,0]}
+        rookie_df = pd.DataFrame.from_dict(rookie_dict)
+        qb_ones = pd.concat([qb_ones, rookie_df])
+        return qb_ones
+    
+
+    def team_epa_func(self, nfl_df):
+        tms = nfl_df['posteam'].unique()
+        out = pd.DataFrame()
+        df = nfl_df[nfl_df['season'] == 2022]
+        for tm in tms:
+            df2 = df[df['posteam'] == tm]
+            x = df2.shape[0] - 2
+            df2['wt_avg_team'] = df2["team_qb_epa"].rolling(x).mean()
+            out = pd.concat([out, df2.tail(1)])
+        out = out[['posteam', 'wt_avg_team']]
+        out.columns = ['team', 'wt_avg_team']
+        return out
+    
+
+    def first_rd_qb_func(self, nfl_df):
+        first_rd_qb = nfl_df[nfl_df['season'] > 2002]
+        first_rd_qb = first_rd_qb[first_rd_qb['position'] == 'QB']
+        first_rd_qb = first_rd_qb[~first_rd_qb['gsis_id'].isna()]
+        first_rd_qb = first_rd_qb[first_rd_qb['round'] == 1]
+        first_rd_qb = first_rd_qb[['gsis_id', 'season', 'pfr_player_name']]
+        first_rd_qb.rename(columns={'gsis_id': 'passer_player_id'}, inplace=True)
+        return first_rd_qb
+    
+
+    def rookie_pass_func(self, nfl_df, rookie_df):
+        rookie_pass = nfl_df[nfl_df['play_type'] == 'pass']
+        rookie_pass = rookie_pass[rookie_pass['passer_player_id'].isin(rookie_df['passer_player_id'])]  
+        return rookie_pass
+    
+
+    def rookie_run_func(self, nfl_df, rookie_df):
+        rookie_run = nfl_df[nfl_df['play_type'] == 'run']
+        rookie_run = rookie_run[rookie_run['rusher_player_id'].isin(rookie_df['passer_player_id'])]  
+        return rookie_run
+    
+
+    def rookie_play_func(self, pass_df, run_df):
+        rookie_plays = pd.concat([pass_df, run_df])
+        rookie_plays = rookie_plays.groupby(['season','game_id', 'passer_player_id']).apply(
+                                              lambda x: x['epa'].sum()).reset_index()
+        rookie_plays.columns = ['season','game_id', 'passer_player_id', 'qb_epa']
+        rookie_plays = rookie_plays.drop_duplicates()
+        return rookie_plays
+    
+
+    def rookie_epa_func(self, rookie_df, rookie_plays):
+        rookie_epa = pd.merge(rookie_df, rookie_plays, on=['passer_player_id', 'season'], how='left')
+        return rookie_epa
+    
+
+    def rookie_mean_func(self, rookie_df):
+        rookie_mean = rookie_df['qb_epa'].mean()
+        return rookie_mean
+    
+
+    def qb_adj_func(self, team_epa, qb_ones, rookie_mean):
+        qb_update_2023 = team_epa.merge(qb_ones, on='team', how='left')
+        qb_update_2023.at[11,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[11,"wt_avg_team"]))/2)-5
+        qb_update_2023.at[15,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[15,"wt_avg_team"]))/2)+9
+        qb_update_2023.at[18,"wt_avg"] = (rookie_mean + float(qb_update_2023.at[18,"wt_avg_team"]))/2
+        qb_update_2023.at[21,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[21,"wt_avg_team"]))/2)-5
+        qb_update_2023.at[24,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[24,"wt_avg_team"]))/2)-1.5
+        qb_update_2023 = qb_update_2023[qb_update_2023["last_name"]!="Dalton"]
+        qb_update_2023 = qb_update_2023[qb_update_2023["last_name"]!="Stroud"]
+        qb_update_2023.iloc[6] = ['CLE', float(qb_update_2023.iloc[6, 1]), 2023, 'Joe', 
+                                  'Flacco', '00-0026158', 'CLE', 'J.Flacco', 
+                                  float(qb_update_2023.iloc[6, 8]) + 1]
+        return qb_update_2023
