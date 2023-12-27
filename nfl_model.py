@@ -27,16 +27,16 @@ class import_data_class():
         start_run = time.time()
 
         # import nfl data past 20 years
-        self.nfl_df = self.import_games_func()
+        self.nfl_data = self.import_games_func()
 
         # import quarterback data for 2023 
-        self.quarterbacks_df = self.import_qb_func()
+        self.quarterback_data = self.import_qb_func()
 
         # import rookie data
-        self.rookies_df = self.import_rookies_func()
+        self.rookie_data = self.import_rookies_func()
 
         # import nfl schedule data
-        self.schedules_df = self.import_schedules_func()
+        self.schedule_data = self.import_schedules_func()
 
         # end runtime
         end_run = time.time()
@@ -44,7 +44,7 @@ class import_data_class():
         print("import data runtime: " + str(end_run) + " minutes.")
 
     def import_games_func(self):
-        df = nfl.import_pbp_data(range(2003,2023))
+        df = nfl.import_pbp_data(range(2005,2024))
         return df
     
     def import_qb_func(self):
@@ -66,52 +66,55 @@ class prep_data_class():
         # start runtime
         start_run = time.time()
 
-        # create close game data 
-        self.game_data_df = self.clean_data_func(import_obj.nfl_df, range(2016,2024))
+        # create close game data past eight years
+        self.close_game_data = self.clean_data_func(import_obj.nfl_data, range(2016,2024))
 
-        # calculate game epa
-        self.game_epa_df = self.sum_epa_func(self.game_data_df, "posteam")
-        self.game_epa_allowed_df = self.sum_epa_func(self.game_data_df, "defteam")
+        # create active quarterbacks
+        self.active_qbs = self.active_qb_func(import_obj.quarterback_data)
 
-        # calcuate season epa
-        self.seas_epa_df = self.season_epa_func(self.game_data_df)
-        self.seas_epa_allowed_df = self.season_epa_func(self.game_data_df)
+        # create starting quarterbacks
+        self.starting_qbs = self.starting_qb_func(self.close_game_data, season=2023, week=15)
 
-        # epa passing value
-        self.epa_value_list = self.qb_value_adj_func(import_obj.nfl_df, range(2021,2024))
+        # calculate cumulative epa 
+        self.cumulative_epa = self.cumulative_epa_func(self.close_game_data, "posteam")
+        self.cumulative_epa_allowed = self.cumulative_epa_func(self.close_game_data, "defteam")
 
-        # calc qb rankings
-        self.qb_rankings_df = self.qb_ranking_func(self.epa_value_list)
+        # calculate season epa past 8 seasons
+        self.season_epa = self.season_epa_func(self.close_game_data)
+        self.season_epa_allowed = self.season_epa_func(self.close_game_data)
 
-        # create active qbs
-        self.active_qbs_df = self.active_qb_func(import_obj.quarterbacks_df)
+        # calculate passing value epa
+        self.passing_value_epa = self.passing_value_epa_func(import_obj.nfl_data, range(2021,2024))
+
+        # create quarterback rankings
+        self.qb_rankings = self.qb_rankings_func(self.passing_value_epa)
 
         # create starting qbs 
-        self.qb_one_df = self.qb_one_func(self.active_qbs_df, self.qb_rankings_df)
+        self.starter_rankings = self.starter_rankings_func(self.starting_qbs, self.qb_rankings)
 
         # create qbs by team
-        self.team_epa_df = self.team_epa_func(self.epa_value_list[1])
+        self.team_epa = self.team_epa_func(self.passing_value_epa[1])
 
         # rookie impact
-        self.first_rd_qb_df = self.first_rd_qb_func(import_obj.rookies_df)  
+        self.first_rd_qb = self.first_rd_qb_func(import_obj.rookie_data)  
 
         # rookie pass value
-        self.rookie_pass_df = self.rookie_pass_func(import_obj.nfl_df, self.first_rd_qb_df)
+        self.rookie_pass = self.rookie_pass_func(import_obj.nfl_data, self.first_rd_qb)
 
         # rookie run value
-        self.rookie_run_df = self.rookie_run_func(import_obj.nfl_df, self.first_rd_qb_df)
+        self.rookie_run = self.rookie_run_func(import_obj.nfl_data, self.first_rd_qb)
 
         # rookie play value
-        self.rookie_play_df = self.rookie_play_func(self.rookie_pass_df, self.rookie_run_df)
+        self.rookie_play = self.rookie_play_func(self.rookie_pass, self.rookie_run)
 
         # rookie season epa
-        self.rookie_epa_df = self.rookie_epa_func(self.first_rd_qb_df, self.rookie_play_df)
+        self.rookie_epa = self.rookie_epa_func(self.first_rd_qb, self.rookie_play)
 
         # rookie average epa
-        self.rookie_mean_df = self.rookie_mean_func(self.rookie_epa_df)
+        self.rookie_mean = self.rookie_mean_func(self.rookie_epa)
         
-        # compare qb value vs actual production
-        self.qb_adj_df = self.qb_adj_func(self.team_epa_df, self.qb_one_df, self.rookie_mean_df)
+        # qb rankings adjusments (add next years rookie data here)
+        self.qb_rankings_adjustment = self.qb_rankings_adjustment_func(self.team_epa, self.starter_rankings, self.rookie_mean)
 
         # end runtime
         end_run = time.time()
@@ -151,7 +154,36 @@ class prep_data_class():
         return clean_df
     
 
-    def sum_epa_func(self, nfl_df, pos_side):
+    def active_qb_func(self, nfl_data):
+        qbs_2023 = nfl_data[nfl_data['status'] == "ACT"]
+        qbs_2023 = qbs_2023[qbs_2023['position'] == 'QB']
+        qbs_2023 = qbs_2023[(qbs_2023['status'] == 'ACT') | (qbs_2023['status'] == 'INA')]
+        qbs_2023 = qbs_2023[['status', 'team_abbr', 'position', 'first_name', 'last_name', 'gsis_id']]
+        qbs_2023.rename(columns={'gsis_id': 'passer_player_id'}, inplace=True)
+        return qbs_2023
+
+
+    def starting_qb_func(self, nfl_data, season, week):
+        qbs_2023 = nfl_data[nfl_data['season'] == season]
+        qbs_2023 = qbs_2023[qbs_2023['week'] == week]
+        qbs_2023 = qbs_2023.groupby(['passer_player_id', 'passer_player_name', 'posteam']) \
+                                     .apply(lambda x: x.assign(sum_epa = x['epa'].sum())) \
+                                     .loc[:, ['passer_player_name', 'passer_player_id', 'posteam']] \
+                                     .dropna(subset=['passer_player_name']) \
+                                     .drop_duplicates() \
+                                     .dropna() \
+                                     .reset_index(drop=True) 
+
+        # needs better logic - update for 2024
+        qbs_2023 = qbs_2023.drop([21,6,13,16,19,31,23,26,27,29,34,39,44])
+        qbs_2023 = qbs_2023.reset_index(drop=True)
+        qbs_2023.iloc[0] = ["T.Heinicke", "00-0031800", "ATL"]
+        qbs_2023.iloc[11] = ["R.Tannehill", "00-0029701", "TEN"]
+        qbs_2023.iloc[23] = ["G.Smith", "00-0030565", "SEA"]
+        return qbs_2023
+    
+
+    def cumulative_epa_func(self, nfl_df, pos_side):
         if pos_side == "posteam":
             columns = ['passer_player_id', 'passer_player_name', 'posteam', 'qb_sum_epa']
         if pos_side == "defteam":
@@ -177,7 +209,7 @@ class prep_data_class():
         return df
     
 
-    def qb_value_adj_func(self, nfl_df, nfl_range):
+    def passing_value_epa_func(self, nfl_df, nfl_range):
         
         # clean qb data
         qb_df = self.clean_data_func(nfl_df, nfl_range)
@@ -188,7 +220,7 @@ class prep_data_class():
         passers = passers[~passers['IDs'].isna()]
         passers = passers.groupby('IDs').size().reset_index(name='passes_thrown')
         
-        # filter less than 100 completions
+        # filter less than 50 completions
         passers = passers[passers['passes_thrown'] > 50]
         passers = passers.drop(columns=['passes_thrown'])
         passers = passers.drop_duplicates()
@@ -217,7 +249,7 @@ class prep_data_class():
         return [out2, out3]
     
 
-    def qb_ranking_func(self, quarterback_df): 
+    def qb_rankings_func(self, quarterback_df): 
 
         # groupby passer player id
         qb_n = quarterback_df[0].groupby('passer_player_id').size().reset_index(name='games')
@@ -237,39 +269,20 @@ class prep_data_class():
             df2 = df2.tail(17)
             x = min(15, len(df2) - 2)
             df2['wt_avg'] = df2["qb_sum_epa"].rolling(x).mean()
-            # df2['wt_avg'] = df2["qb_sum_epa"].transform(lambda x: x.rolling(window=x_window, min_periods=1).mean().shift())
             out = out.append(df2.tail(1))
         out = out[['posteam', 'passer_player_id', 'passer_player_name', 'wt_avg']]
         return out
     
 
-    def active_qb_func(self, players_df):
-        qbs_2023 = players_df[players_df['status'] == "ACT"]
-        qbs_2023 = qbs_2023[qbs_2023['position'] == 'QB']
-        qbs_2023 = qbs_2023[(qbs_2023['status'] == 'ACT') | (qbs_2023['status'] == 'INA')]
-        qbs_2023 = qbs_2023[['status', 'team_abbr', 'position', 'first_name', 'last_name', 'gsis_id']]
-        qbs_2023.rename(columns={'gsis_id': 'passer_player_id'}, inplace=True)
-        return qbs_2023
-    
-
-    def qb_one_func(self, quarterback_df, rankings_df):
-        df = pd.merge(quarterback_df, rankings_df, on='passer_player_id', how='left')
-        df = df.dropna(subset=['wt_avg'])
-        df = df.drop(columns=['position'])
+    def starter_rankings_func(self, quarterback_df, rankings_df):
+        df = pd.merge(quarterback_df, rankings_df, on=['passer_player_name','passer_player_id', 'posteam'])
         df = df.reset_index(drop=True)
-        qb_ones = df.drop([15,27,57,31,8,11,55,51,13,37,47,4,9,6,39,48,34,21,50,52,58,36,3,30,16,5,46,24,35,19])
-        qb_ones.rename(columns={'team_abbr': 'team'}, inplace=True)
-        rookie_dict = {"status":["ACT", "ACT", "ACT", "ACT", "ACT"],
-                       "team":["CAR", "CIN", "HOU", "NYG", "WAS"],
-                       "first_name":["Bryce", "Jake", "CJ", "Tommy", "Sam"],
-                       "last_name":["Young", "Browning", "Stroud", "Devito", "Howell"],
-                       "passer_player_id":["00-0039150", "00-0035100", "00-0039163", "00-0038476", "00-0037077"],
-                       "posteam":["CAR", "CIN", "HOU", "NYG", "WAS"],
-                       "passer_player_name":["B.Young", "J.Browning", "C.Stroud", "T.Devito", "S.Howell"],
-                       "wt_avg":[0,0,0,0,0]}
-        rookie_df = pd.DataFrame.from_dict(rookie_dict)
-        qb_ones = pd.concat([qb_ones, rookie_df])
-        return qb_ones
+        adds = pd.DataFrame({'passer_player_name': ['E.Stick'],
+                             'passer_player_id': ["00-0035282"],
+                             'posteam': ["LAC"],
+                             "wt_avg": [float(-6.021435)]})
+        df = pd.concat([df, adds])
+        return df
     
 
     def team_epa_func(self, nfl_df):
@@ -327,16 +340,9 @@ class prep_data_class():
         return rookie_mean
     
 
-    def qb_adj_func(self, team_epa, qb_ones, rookie_mean):
-        qb_update_2023 = team_epa.merge(qb_ones, on='team', how='left')
-        qb_update_2023.at[11,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[11,"wt_avg_team"]))/2)-5
-        qb_update_2023.at[15,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[15,"wt_avg_team"]))/2)+9
-        qb_update_2023.at[18,"wt_avg"] = (rookie_mean + float(qb_update_2023.at[18,"wt_avg_team"]))/2
-        qb_update_2023.at[21,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[21,"wt_avg_team"]))/2)-5
-        qb_update_2023.at[24,"wt_avg"] = ((rookie_mean + float(qb_update_2023.at[24,"wt_avg_team"]))/2)-1.5
-        qb_update_2023 = qb_update_2023[qb_update_2023["last_name"]!="Dalton"]
-        qb_update_2023 = qb_update_2023[qb_update_2023["last_name"]!="Stroud"]
-        qb_update_2023.iloc[6] = ['CLE', float(qb_update_2023.iloc[6, 1]), 2023, 'Joe', 
-                                  'Flacco', '00-0026158', 'CLE', 'J.Flacco', 
-                                  float(qb_update_2023.iloc[6, 8]) + 1]
+    def qb_rankings_adjustment_func(self, team_epa, starters):
+        starters.rename(columns={'posteam': 'team'}, inplace=True)
+        qb_update_2023 = team_epa.merge(starters, on='team', how='left')
+        qb_update_2023.at[7,"wt_avg"] = float(qb_update_2023.at[7,"wt_avg_team"]) * .85
+        qb_update_2023.at[2,"wt_avg"] = float(qb_update_2023.at[2,"wt_avg_team"]) + 5
         return qb_update_2023
