@@ -42,7 +42,7 @@ class efficiency_data_class():
         self.points_per_gm = self.points_per_game_func(epa_obj.close_game_data, 'posteam')
         self.points_per_gm_allowed = self.points_per_game_func(epa_obj.close_game_data, 'defteam')        
 
-        # join offensive data with points data.
+        # join offensive data with points data
         self.off_epa_efficiency = self.join_eff_points_func(self.off_epa_efficiency, self.points_per_gm, 'posteam')
         self.def_epa_efficiency = self.join_eff_points_func(self.def_epa_efficiency, self.points_per_gm_allowed, 'defteam')
 
@@ -87,6 +87,33 @@ class efficiency_data_class():
                                                               self.second_down_def_pass, self.second_down_def_rush,
                                                               self.third_down_def_pass, self.third_down_def_rush,
                                                               "defteam")
+        
+        # total efficiency
+        self.total_off_efficiency = self.total_efficiency_func(self.off_efficiency_adj, self.all_down_off_eff, 'posteam')
+        self.total_def_efficiency = self.total_efficiency_func(self.def_efficiency_adj, self.all_down_def_eff, 'defteam')
+
+        # model prep - gather data
+        self.model_data = self.prep_model_data_func(import_obj.nfl_data, epa_obj)
+
+        # model prep - passing epa
+        self.pass_epa = self.pass_efficiency_func(self.model_data, 'posteam')
+        self.pass_epa_allowed = self.pass_efficiency_func(self.model_data, 'defteam')
+
+        # model prep - run epa
+        self.run_epa = self.run_efficiency_func(self.model_data, 'posteam')
+        self.run_epa_allowed = self.run_efficiency_func(self.model_data, 'defteam')
+
+        # model prep - total epa
+        self.total_epa = self.pos_epa_efficiency_func(self.pass_epa, self.run_epa, 'posteam')
+        self.total_epa_allowed = self.pos_epa_efficiency_func(self.pass_epa_allowed, self.run_epa_allowed, 'defteam')
+
+        # model prep - points a game
+        self.points_game = self.points_per_game_func(self.model_data, 'posteam')
+        self.points_game_allowed = self.points_per_game_func(self.model_data, 'defteam')
+
+        # model prep - offensive epa 
+        self.offensive_epa = self.join_eff_points_func(self.total_epa, self.points_game, 'posteam')
+        self.defensive_epa = self.join_eff_points_func(self.total_epa_allowed, self.points_game_allowed, 'defteam')
 
         # end runtime
         end_run = time.time()
@@ -174,14 +201,6 @@ class efficiency_data_class():
         return pts_per_game
     
 
-    def correct_tm_names(self, temp_df):
-        temp_dict = {"OAK":"LV", "SD":"LAC"}
-        for key,value in temp_dict.items():
-            temp_df.loc[temp_df["home_team"] == key, "home_team"] = value
-            temp_df.loc[temp_df["away_team"] == key, "away_team"] = value
-        return temp_df
-    
-
     def join_eff_points_func(self, eff_data, points_data, pos_def):
         eff_points = pd.merge(eff_data, points_data, on=['game_id', pos_def, 'home_team', 'away_team'], how='left')
         if pos_def == 'posteam':
@@ -245,3 +264,37 @@ class efficiency_data_class():
         all_down_eff = all_down_eff.merge(df5, on = ['game_id',pos_def], how = 'left') 
         all_down_eff = all_down_eff.merge(df6, on = ['game_id',pos_def], how = 'left') 
         return all_down_eff
+    
+
+    def total_efficiency_func(self, df, df2, pos_def):
+        out = pd.merge(df, df2, on=['game_id', pos_def], how='left')
+        out['pass_rate'] = out['n_pass'] / out['n_plays']
+        out['run_rate'] = 1 - out['pass_rate'] 
+        out['pass_rate_first'] = out['n_play_pass_1'] / out['n_play_pass_1'] + out['n_play_run_1']
+        out['pass_rate_second'] = out['n_play_pass_2'] / out['n_play_pass_2'] + out['n_play_run_2']
+        return out
+    
+
+    def prep_model_data_func(self, nfl_data, epa_obj):
+        final_offense = epa_obj.clean_data_func(nfl_data, range(2022,2024))
+        final_offense['week'] = np.where((final_offense['week'] == 1) & (final_offense['season'] == 2023), 19, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 2) & (final_offense['season'] == 2023), 20, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 3) & (final_offense['season'] == 2023), 21, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 4) & (final_offense['season'] == 2023), 22, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 5) & (final_offense['season'] == 2023), 23, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 6) & (final_offense['season'] == 2023), 24, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 7) & (final_offense['season'] == 2023), 25, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 8) & (final_offense['season'] == 2023), 26, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 9) & (final_offense['season'] == 2023), 27, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 10) & (final_offense['season'] == 2023), 28, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 11) & (final_offense['season'] == 2023), 29, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 12) & (final_offense['season'] == 2023), 30, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 13) & (final_offense['season'] == 2023), 31, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 14) & (final_offense['season'] == 2023), 32, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 15) & (final_offense['season'] == 2023), 33, final_offense['week'])
+        final_offense['week'] = np.where((final_offense['week'] == 16) & (final_offense['season'] == 2023), 34, final_offense['week'])
+        final_offense['season'] = 2023
+        final_offense = final_offense[final_offense['week'] > 16]
+        final_offense['week'] = final_offense['week'] - 16
+        final_offense['week'].value_counts()
+        return final_offense
