@@ -85,6 +85,30 @@ class model_data_class():
                                                            self.defensive_gbm, self.defensive_train_h2o, 
                                                            'score_allowed', set(self.defensive_train_h2o.columns) - 
                                                            set(['score_allowed']))
+        
+        # view gbm performance
+        self.offensive_gbm_test = self.model_performance_func(self.offensive_gbm)
+        self.defensive_gbm_test = self.model_performance_func(self.defensive_gbm)
+
+        # view random fores performance
+        self.offensive_rf_test = self.model_performance_func(self.offensive_rf)
+        self.defensive_rf_test = self.model_performance_func(self.defensive_rf)
+
+        # view linear regression performance
+        self.offensive_lr_test = self.model_performance_func(self.offensive_lr)
+        self.defensive_lr_test = self.model_performance_func(self.defensive_lr)
+
+        # view deep laerning performance
+        self.offensive_nn_test = self.model_performance_func(self.offensive_nn)
+        self.defensive_nn_test = self.model_performance_func(self.defensive_nn)
+
+        # view ensemble performance
+        self.offensive_ensemble_test = self.model_performance_func(self.offensive_ensemble)
+        self.defensive_ensemble_test = self.model_performance_func(self.defensive_ensemble)
+        self.offensive_ensemble_test.rmse()
+        self.defensive_ensemble_test.rmse()
+        min([self.offensive_gbm_test.rmse(), self.offensive_rf_test.rmse(), self.offensive_lr_test.rmse(), self.offensive_nn_test.rmse()])
+        min([self.defensive_gbm_test.rmse(), self.defensive_rf_test.rmse(), self.defensive_lr_test.rmse(), self.defensive_nn_test.rmse()])
 
 
     def prep_df(self, eff_data, eff_columns):
@@ -129,4 +153,9 @@ class model_data_class():
     def ensemble_model_func(self, mod, mod2, mod3, mod4, df, y, x):
         m = H2OStackedEnsembleEstimator(metalearner_algorithm="glm", base_models=[mod, mod2, mod3, mod4])
         out = m.train(x=x, y=y, training_frame=df)
+        return out
+    
+
+    def model_performance_func(self, df):
+        out = H2OGradientBoostingEstimator.model_performance(df)
         return out

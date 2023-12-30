@@ -334,9 +334,8 @@ class efficiency_data_class():
         final_offense['week'] = np.where((final_offense['week'] == 13) & (final_offense['season'] == 2023), 31, final_offense['week'])
         final_offense['week'] = np.where((final_offense['week'] == 14) & (final_offense['season'] == 2023), 32, final_offense['week'])
         final_offense['week'] = np.where((final_offense['week'] == 15) & (final_offense['season'] == 2023), 33, final_offense['week'])
-        final_offense['week'] = np.where((final_offense['week'] == 16) & (final_offense['season'] == 2023), 34, final_offense['week'])
         final_offense['season'] = 2023
-        final_offense = final_offense[final_offense['week'] > 16]
-        final_offense['week'] = final_offense['week'] - 16
+        final_offense = final_offense[final_offense['week'] > 10]
+        final_offense['week'] = final_offense['week'] - 10
         final_offense['week'].value_counts()
         return final_offense
