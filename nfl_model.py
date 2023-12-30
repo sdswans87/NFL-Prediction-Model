@@ -21,21 +21,21 @@ class model_data_class():
     def __init__(self, import_obj, epa_obj, eff_obj):
         
         # start runtime
-        start_time = time.time()
+        start_run = time.time()
 
         # ensemble column lists
-        ens_off_cols = ['game_id','year', 'week', 'away_team', 'home_team','posteam',
-                        'n_pass','n_rush','n_plays', 'home_final','away_final',
-                        'total_tds','total_fgs_att','total_pat','total_effective_pts',
-                        'total_score','pt_diff']
-        ens_def_cols = ['game_id','year', 'week', 'away_team', 'home_team','defteam',
-                        'n_pass','n_rush','n_plays', 'home_final','away_final',
-                        'total_tds','total_fgs_att','total_pat','total_effective_pts',
-                        'total_score','pt_diff']
+        off_columns = ['game_id','year', 'week', 'away_team', 'home_team','posteam',
+                       'n_pass','n_rush','n_plays', 'home_final','away_final',
+                       'total_tds','total_fgs_att','total_pat','total_effective_pts',
+                       'total_score','pt_diff']
+        def_columns = ['game_id','year', 'week', 'away_team', 'home_team','defteam',
+                       'n_pass','n_rush','n_plays', 'home_final','away_final',
+                       'total_tds','total_fgs_att','total_pat','total_effective_pts',
+                       'total_score','pt_diff']
         
         # prep for model calculation
-        self.ensemble_offense = self.prep_df(eff_obj.total_off_efficiency, ens_off_cols)
-        self.ensemble_defense = self.prep_df(eff_obj.total_def_efficiency, ens_def_cols)
+        self.ensemble_offense = self.prep_data_func(eff_obj.total_off_efficiency, off_columns)
+        self.ensemble_defense = self.prep_data_func(eff_obj.total_def_efficiency, def_columns)
 
         # ensemble model offensive efficiency/actual points scored
         h2o.init()
@@ -110,8 +110,13 @@ class model_data_class():
         min([self.offensive_gbm_test.rmse(), self.offensive_rf_test.rmse(), self.offensive_lr_test.rmse(), self.offensive_nn_test.rmse()])
         min([self.defensive_gbm_test.rmse(), self.defensive_rf_test.rmse(), self.defensive_lr_test.rmse(), self.defensive_nn_test.rmse()])
 
+        # end runtime
+        end_run = time.time()
+        end_run = (end_run - start_run)/60
+        print("model data runtime: " + str(end_run) + " minutes.")
 
-    def prep_df(self, eff_data, eff_columns):
+
+    def prep_data_func(self, eff_data, eff_columns):
         df = eff_data.drop(columns=eff_columns)
         smp_size = int(0.80 * df.shape[0])
         np.random.seed(5)
@@ -159,3 +164,90 @@ class model_data_class():
     def model_performance_func(self, df):
         out = H2OGradientBoostingEstimator.model_performance(df)
         return out
+    
+
+class model_effective_points():
+    def __init__(self, import_obj, epa_obj, eff_obj, mod_obj):
+        
+        # start runtime
+        start_time = time.time()
+
+        # model efficiency columns
+        off_columns = ['game_id','year', 'week', 'away_team', 'home_team','posteam',
+                       'n_pass','n_rush','n_plays', 'home_final','away_final',
+                       'total_tds','total_fgs_att','total_pat','total_score',
+                       'pt_diff']
+        def_columns = ['game_id','year', 'week', 'away_team', 'home_team','defteam',
+                       'n_pass','n_rush','n_plays', 'home_final','away_final',
+                       'total_tds','total_fgs_att','total_pat','total_score',
+                       'pt_diff']
+
+        # build models off of effective points
+        self.ensemble_off_eff = mod_obj.prep_data_func(eff_obj.total_off_efficiency, off_columns)
+        self.ensemble_def_eff = mod_obj.prep_data_func(eff_obj.total_def_efficiency, def_columns)
+        self.ensemble_off_eff_train = mod_obj.ensemble_func(self.ensemble_off_eff, 0)
+        self.ensemble_off_eff_test = mod_obj.ensemble_func(self.ensemble_off_eff, 1)
+        self.ensemble_def_eff_train = mod_obj.ensemble_func(self.ensemble_def_eff, 0)
+        self.ensemble_def_eff_test = mod_obj.ensemble_func(self.ensemble_def_eff, 1)
+
+        # train gradient boosting
+        self.offensive_eff_gbm = mod_obj.gbm_model_func(self.ensemble_off_eff_train, 'total_effective_pts',
+                                                        set(self.ensemble_off_eff_train.columns) - 
+                                                        set(['total_effective_pts']), 5, 5)
+        self.defensive_eff_gbm = mod_obj.gbm_model_func(self.ensemble_def_eff_train, 'total_effective_pts', 
+                                                        set(self.ensemble_def_eff_train.columns) - 
+                                                        set(['total_effective_pts']), 5, 5)
+        
+        # train random forest
+        self.offensive_eff_rf = mod_obj.rf_model_func(self.ensemble_off_eff_train, 'total_effective_pts',
+                                                      set(self.ensemble_off_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+        self.defensive_eff_rf = mod_obj.rf_model_func(self.ensemble_def_eff_train, 'total_effective_pts', 
+                                                      set(self.ensemble_def_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+        
+        # train linear regression
+        self.offensive_eff_lr = mod_obj.lr_model_func(self.ensemble_off_eff_train, 'total_effective_pts',
+                                                      set(self.ensemble_off_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+        self.defensive_eff_lr = mod_obj.lr_model_func(self.ensemble_def_eff_train, 'total_effective_pts',
+                                                      set(self.ensemble_def_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+        
+        # train neural net
+        self.offensive_eff_nn = mod_obj.nn_model_func(self.ensemble_off_eff_train, 'total_effective_pts',
+                                                      set(self.ensemble_off_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+        self.defensive_eff_nn = mod_obj.nn_model_func(self.ensemble_def_eff_train, 'total_effective_pts',
+                                                      set(self.ensemble_def_eff_train.columns) - 
+                                                      set(['total_effective_pts']), 5, 5)
+
+        # train stacked random forest ensemble using gradient boosting/random forest/linear regression
+        self.offensive_eff_ensemble = mod_obj.ensemble_model_func(self.offensive_eff_lr, self.offensive_eff_rf, self.offensive_eff_nn, 
+                                                                  self.offensive_eff_gbm, self.ensemble_off_eff_train, 
+                                                                  'total_effective_pts', set(self.ensemble_off_eff_train.columns) - 
+                                                                  set(['total_effective_pts']))
+        self.defensive_eff_ensemble = mod_obj.ensemble_model_func(self.defensive_eff_lr, self.defensive_eff_rf, self.defensive_eff_nn, 
+                                                                  self.defensive_eff_gbm, self.ensemble_def_eff_train, 
+                                                                  'total_effective_pts', set(self.ensemble_def_eff_train.columns) - 
+                                                                  set(['total_effective_pts']))
+        
+        # check model performance
+        self.offensive_eff_gbm_test = mod_obj.model_performance_func(self.offensive_eff_gbm)
+        self.defensive_eff_gbm_test = mod_obj.model_performance_func(self.defensive_eff_gbm)
+        self.offensive_eff_rf_test = mod_obj.model_performance_func(self.offensive_eff_rf)
+        self.defensive_eff_rf_test = mod_obj.model_performance_func(self.defensive_eff_rf)
+        self.offensive_eff_lr_test = mod_obj.model_performance_func(self.offensive_eff_lr)
+        self.defensive_eff_lr_test = mod_obj.model_performance_func(self.defensive_eff_lr)
+        self.offensive_eff_nn_test = mod_obj.model_performance_func(self.offensive_eff_nn)
+        self.defensive_eff_nn_test = mod_obj.model_performance_func(self.defensive_eff_nn)
+        self.offensive_eff_ensemble_test = mod_obj.model_performance_func(self.offensive_eff_ensemble)
+        self.defensive_eff_ensemble_test = mod_obj.model_performance_func(self.defensive_eff_ensemble)
+        
+        # calculate mins
+        min([self.offensive_eff_gbm_test.rmse(), self.offensive_eff_rf_test.rmse(), self.offensive_eff_lr_test.rmse(), 
+             self.offensive_eff_nn_test.rmse()])
+        min([self.defensive_eff_gbm_test.rmse(), self.defensive_eff_rf_test.rmse(), self.defensive_eff_lr_test.rmse(), 
+             self.defensive_eff_nn_test.rmse()])
+        self.offensive_eff_ensemble_test.rmse()
+        self.defensive_eff_ensemble_test.rmse()
