@@ -111,9 +111,51 @@ class efficiency_data_class():
         self.points_game = self.points_per_game_func(self.model_data, 'posteam')
         self.points_game_allowed = self.points_per_game_func(self.model_data, 'defteam')
 
-        # model prep - offensive epa 
+        # model prep - off/def epa 
         self.offensive_epa = self.join_eff_points_func(self.total_epa, self.points_game, 'posteam')
         self.defensive_epa = self.join_eff_points_func(self.total_epa_allowed, self.points_game_allowed, 'defteam')
+
+        # model prep - off/def efficiency
+        self.offensive_efficiency = self.cpoe_func(self.model_data, self.offensive_epa, 'posteam')
+        self.defensive_efficiency = self.cpoe_func(self.model_data, self.defensive_epa, 'defteam')
+
+        # model prep - first down offensive efficiency 
+        self.first_down_off_passing = self.down_efficiency_func(self.model_data, 1, 'pass', 'posteam')
+        self.first_down_off_rushing = self.down_efficiency_func(self.model_data, 1,'run', 'posteam')
+
+        # model prep - first down defensive efficiency
+        self.first_down_def_passing = self.down_efficiency_func(self.model_data, 1, 'pass', 'defteam')
+        self.first_down_def_rushing = self.down_efficiency_func(self.model_data, 1, 'run', 'defteam')
+        
+        # model prep - second down offensive efficiency
+        self.second_down_off_passing = self.down_efficiency_func(self.model_data, 2, 'pass', 'posteam')
+        self.second_down_off_rushing = self.down_efficiency_func(self.model_data, 2, 'run', 'posteam')
+        
+        # model prep - second down defensive efficiency
+        self.second_down_def_passing = self.down_efficiency_func(self.model_data, 2, 'pass', 'defteam')
+        self.second_down_def_rushing = self.down_efficiency_func(self.model_data, 2, 'run', 'defteam')
+
+        # model prep - third down offensive efficiency
+        self.third_down_off_passing = self.down_efficiency_func(self.model_data, 3, 'pass', 'posteam')
+        self.third_down_off_rushing = self.down_efficiency_func(self.model_data, 3, 'run', 'posteam')
+        
+        # model prep - third down defensive efficiency
+        self.third_down_def_passing = self.down_efficiency_func(self.model_data, 3, 'pass', 'defteam')
+        self.third_down_def_rushing = self.down_efficiency_func(self.model_data, 3, 'run', 'defteam')
+
+        # model prep - all down efficiency
+        self.all_down_offense = self.all_down_efficiency_func(self.first_down_off_passing, self.first_down_off_rushing, 
+                                                              self.second_down_off_passing, self.second_down_off_rushing,
+                                                              self.third_down_off_passing, self.third_down_off_rushing,
+                                                              "posteam")
+        self.all_down_defense = self.all_down_efficiency_func(self.first_down_def_passing, self.first_down_def_rushing, 
+                                                              self.second_down_def_passing, self.second_down_def_rushing,
+                                                              self.third_down_def_passing, self.third_down_def_rushing,
+                                                              "defteam")
+        
+        # model prep - total efficiency
+        self.total_offense_eff = self.total_efficiency_func(self.offensive_efficiency, self.all_down_offense, 'posteam')
+        self.total_defense_eff = self.total_efficiency_func(self.defensive_efficiency, self.all_down_defense, 'defteam')
 
         # end runtime
         end_run = time.time()
