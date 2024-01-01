@@ -40,6 +40,9 @@ class source_data():
         self.src_passing_data = nfl_obj.source_game_data(import_object.imp_game_data, range(2021,2024))
         self.src_quarterback_data = nfl_obj.source_quarterback_data(import_object.imp_quarterback_data)
         self.src_rookie_data = nfl_obj.source_rookie_data(import_object.imp_rookie_data)  
+        self.src_rookie_pass_data = nfl_obj.source_rookie_pass_data(import_object.imp_game_data, self.src_rookie_data) 
+        self.src_rookie_run_data = nfl_obj.source_rookie_run_data(import_object.imp_game_data, self.src_rookie_data) 
+        self.src_schedule_data = import_object.imp_schedule_data[import_object.imp_schedule_data['season'] != 2020]
         
         # end runtime
         end_run = time.time()

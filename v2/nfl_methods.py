@@ -65,3 +65,17 @@ def source_rookie_data(rookie_data):
     df = df[['gsis_id', 'season', 'pfr_player_name']]
     df.rename(columns={'gsis_id': 'passer_player_id'}, inplace=True)
     return df
+
+
+# source rookie pass data
+def source_rookie_pass_data(game_data, rookie_data):
+    df = game_data[game_data['play_type'] == 'pass']
+    df = df[df['passer_player_id'].isin(rookie_data['passer_player_id'])]  
+    return df
+
+
+# source rookie run data
+def source_rookie_run_data(game_data, rookie_data):
+    df = game_data[game_data['play_type'] == 'run']
+    df = df[df['rusher_player_id'].isin(rookie_data['passer_player_id'])]  
+    return df
