@@ -11,33 +11,37 @@ warnings.simplefilter(action='ignore', category=Warning)
 import nfl_methods as nfl_obj
 
 
-class import_nfl_data():
+class import_data():
     def __init__(self):
 
         # start runtime
         start_run = time.time()
 
-        # input range for nfl data pull
-        game_range_start = 2005
-        game_range_end = 2024
-
-        # input range for schedule data pull 
-        sched_range_start = 2010
-        sched_range_end = 2024
-
-        # import nfl data 
-        self.nfl_data = nfl_obj.import_game_data(game_range_start, game_range_end)
-
-        # import quarterback data for 2023 
-        self.quarterback_data = nfl_obj.import_quarterback_data()
-
-        # import rookie data
-        self.rookie_data = nfl_obj.import_rookie_data()
-
-        # import nfl schedule data
-        self.schedule_data = nfl_obj.import_schedule_data(sched_range_start, sched_range_end)
-
+        # import data
+        self.imp_game_data = nfl_obj.import_game_data(2005, 2024)
+        self.imp_schedule_data = nfl_obj.import_schedule_data(2005, 2024)
+        self.imp_rookie_data = nfl_obj.import_rookie_data(2005)
+        self.imp_quarterback_data = nfl_obj.import_quarterback_data()
+        
         # end runtime
         end_run = time.time()
         end_run = (end_run - start_run)/60
         print("import data runtime: " + str(end_run) + " minutes.")
+
+
+class source_data():
+    def __init__(self, import_object):
+
+        # start runtime
+        start_run = time.time()
+
+        # source data
+        self.src_game_data = nfl_obj.source_game_data(import_object.imp_game_data, range(2016,2024))
+        self.src_passing_data = nfl_obj.source_game_data(import_object.imp_game_data, range(2021,2024))
+        self.src_quarterback_data = nfl_obj.source_quarterback_data(import_object.imp_quarterback_data)
+        self.src_rookie_data = nfl_obj.source_rookie_data(import_object.imp_rookie_data)  
+        
+        # end runtime
+        end_run = time.time()
+        end_run = (end_run - start_run)/60
+        print("source data runtime: " + str(end_run) + " minutes.")
