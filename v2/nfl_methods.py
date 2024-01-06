@@ -4,10 +4,16 @@ Created on Mon Jan  1 05:10:30 2024
 
 @author: swan0
 """
+import h2o
+from h2o.estimators.gbm import H2OGradientBoostingEstimator 
+from h2o.estimators import H2ORandomForestEstimator 
+from h2o.estimators.glm import H2OGeneralizedLinearEstimator 
+from h2o.estimators.deeplearning import H2ODeepLearningEstimator 
+from h2o.estimators.stackedensemble import H2OStackedEnsembleEstimator 
+import matplotlib.pyplot as plt
 import nfl_data_py as nfl
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 
 def import_game_data(start_range, end_range):
@@ -227,8 +233,6 @@ def qb_starter_rankings_data(qb_starters, qb_rankings):
 def qb_rankings_adj_data(epa_data, starter_data, rookie_mean):
     starter_data.rename(columns={'posteam': 'team'}, inplace=True)
     qb_adj = epa_data.merge(starter_data, on='team', how='left')
-    # qb_adj.at[7,"wt_avg"] = float(qb_adj.at[7,"wt_avg_team"]) * .85
-    # qb_adj.at[2,"wt_avg"] = float(qb_adj.at[2,"wt_avg_team"]) + 5
     return qb_adj
 
 
