@@ -142,3 +142,96 @@ class quarterback_data():
         end_run = time.time()
         end_run = (end_run - start_run)/60
         print("quarterback data runtime: " + str(end_run) + " minutes.")
+
+
+class game_efficiency_data():
+    def __init__(self, src_obj, epa_obj):
+
+        # start runtime
+        start_run = time.time()
+
+        # class setup
+        self.src_obj = src_obj
+        self.epa_obj = epa_obj
+
+        # game efficiency per drop back basis data
+        self.game_efficiency = nfl_obj.game_efficiency_data(src_obj.src_game_data, epa_obj.epa_cumulative)
+        self.game_efficiency_allowed = nfl_obj.game_efficiency_data(src_obj.src_game_data, epa_obj.epa_cumulative_allowed)
+
+        # game efficiency per drop back basis by season data
+        self.game_efficiency_by_season = nfl_obj.game_efficiency_by_season_data(src_obj.src_game_data, epa_obj.epa_season)
+
+        # game efficiency by side of ball data
+        self.game_efficiency_offense = nfl_obj.game_efficiency_ball_side_data(src_obj.src_game_data, 'posteam')
+        self.game_efficiency_defense = nfl_obj.game_efficiency_ball_side_data(src_obj.src_game_data, 'defteam')
+
+        # game efficiency passing data
+        self.game_efficiency_pass = nfl_obj.game_efficiency_pass_data(src_obj.src_game_data, 'posteam')
+        self.game_efficiency_pass_allowed = nfl_obj.game_efficiency_pass_data(src_obj.src_game_data, 'defteam')
+
+        # game efficiency running data
+        self.game_efficiency_run = nfl_obj.game_efficiency_run_data(src_obj.src_game_data, 'posteam')
+        self.game_efficiency_run_allowed = nfl_obj.game_efficiency_run_data(src_obj.src_game_data, 'defteam')
+
+        # game efficiency join passing + running data
+        self.game_efficiency_pass_run = nfl_obj.game_efficiency_pass_run_data(self.game_efficiency_pass, self.game_efficiency_run, 'posteam')
+        self.game_efficiency_pass_run_allowed = nfl_obj.game_efficiency_pass_run_data(self.game_efficiency_pass_allowed,
+                                                                                      self.game_efficiency_run_allowed,'defteam')
+
+        # game efficiency points per data
+        self.game_efficiency_pts_game = nfl_obj.game_efficiency_pts_game_data(src_obj.src_game_data, 'posteam')
+        self.game_efficiency_pts_game_allowed = nfl_obj.game_efficiency_pts_game_data(src_obj.src_game_data, 'defteam')  
+
+        # game efficiency combined data
+        self.game_efficiency_combined = nfl_obj.game_efficiency_combined_data(self.game_efficiency_pass_run, self.game_efficiency_pts_game, 'posteam')
+        self.game_efficiency_combined_allowed = nfl_obj.game_efficiency_combined_data(self.game_efficiency_pass_run_allowed, 
+                                                                                      self.game_efficiency_pts_game_allowed, 'defteam')
+        
+        # game efficiency epa data
+        self.game_efficiency_epa = nfl_obj.game_efficiency_epa_data(src_obj.src_game_data, self.game_efficiency_combined, 'posteam')
+        self.game_efficiency_epa_allowed = nfl_obj.game_efficiency_epa_data(src_obj.src_game_data, self.game_efficiency_combined_allowed, 'defteam')
+
+        # game efficiency graph epa
+        self.game_efficiency_pass_epa_graph = nfl_obj.game_efficiency_pass_epa_graph_data(self.game_efficiency_epa)
+        self.game_efficiency_run_epa_graph = nfl_obj.game_efficiency_run_epa_graph_data(self.game_efficiency_epa_allowed)
+
+        # game efficiency by down 
+        self.game_efficiency_by_down_data()
+
+        # total efficiency
+        self.game_efficiency_offense_total = nfl_obj.game_efficiency_total_data(self.game_efficiency_epa, self.down_pass_off, 'posteam')
+        self.game_efficiency_defense_total = nfl_obj.game_efficiency_total_data(self.game_efficiency_epa_allowed, self.down_pass_def, 'defteam')
+
+        # end runtime
+        end_run = time.time()
+        end_run = (end_run - start_run)/60
+        print("game efficiency data runtime: " + str(end_run) + " minutes.")
+
+
+    def game_efficiency_by_down_data(self):
+
+        # game efficiency 1st down data
+        self.down_1st_pass_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 1, 'pass', 'posteam')
+        self.down_1st_run_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 1, 'run', 'posteam')
+        self.down_1st_pass_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 1, 'pass', 'defteam')
+        self.down_1st_run_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 1, 'run', 'defteam')
+
+        # game efficiency 2nd down data
+        self.down_2nd_pass_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 2, 'pass', 'posteam')
+        self.down_2nd_run_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 2, 'run', 'posteam')
+        self.down_2nd_pass_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 2, 'pass', 'defteam')
+        self.down_2nd_run_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 2, 'run', 'defteam')
+
+        # game efficiency 3rd down data
+        self.down_3rd_pass_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 3, 'pass', 'posteam')
+        self.down_3rd_run_off = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 3, 'run', 'posteam')
+        self.down_3rd_pass_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 3, 'pass', 'defteam')
+        self.down_3rd_run_def = nfl_obj.game_efficiency_down_data(self.src_obj.src_game_data, 3, 'run', 'defteam')
+
+        # game efficiency all down data
+        self.down_pass_off = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_off, self.down_1st_run_off, 
+                                                                   self.down_2nd_pass_off, self.down_2nd_run_off,
+                                                                   self.down_3rd_pass_off, self.down_3rd_run_off, "posteam")
+        self.down_pass_def = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_def, self.down_1st_run_def, 
+                                                                   self.down_2nd_pass_def, self.down_2nd_run_def,
+                                                                   self.down_3rd_pass_def, self.down_3rd_run_def, "defteam")
