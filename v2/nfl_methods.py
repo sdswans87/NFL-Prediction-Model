@@ -389,3 +389,53 @@ def game_efficiency_total_data(df, df2, side):
     out['pass_rate_first'] = out['n_play_pass_1'] / out['n_play_pass_1'] + out['n_play_run_1']
     out['pass_rate_second'] = out['n_play_pass_2'] / out['n_play_pass_2'] + out['n_play_run_2']
     return out
+
+
+def ensemble_prep_data(eff_data, columns):
+    df = eff_data.drop(columns=columns)
+    smp_size = int(0.80 * df.shape[0])
+    np.random.seed(5)
+    train_test = np.random.choice(df.index, size=smp_size, replace=False)
+    df_train = df.loc[train_test]
+    df_test = df.drop(train_test)
+    return [df_train, df_test, df]
+
+
+def ensemble_model_data(eff_data, index):
+    ensemble_h2o = h2o.H2OFrame(eff_data[index])
+    return ensemble_h2o
+
+
+def ensemble_model_train_gbm(df, y, x, nfolds, seed):
+    m = H2OGradientBoostingEstimator(nfolds=nfolds, keep_cross_validation_predictions=True, seed=seed)
+    out = m.train(x=x, y=y, training_frame=df)
+    return out
+
+
+def ensemble_model_train_rf(df, y, x, nfolds, seed):
+    m = H2ORandomForestEstimator(nfolds=nfolds, keep_cross_validation_predictions=True, seed=seed)
+    out = m.train(x=x, y=y, training_frame=df)
+    return out
+
+
+def ensemble_model_train_lr(df, y, x, nfolds, seed):
+    m = H2OGeneralizedLinearEstimator(nfolds=nfolds, keep_cross_validation_predictions=True, seed=seed)
+    out = m.train(x=x, y=y, training_frame=df)
+    return out
+
+
+def ensemble_model_train_nn(df, y, x, nfolds, seed):
+    m = H2ODeepLearningEstimator(nfolds=nfolds, keep_cross_validation_predictions=True, seed=seed)
+    out = m.train(x=x, y=y, training_frame=df)
+    return out
+
+
+def ensemble_model_stacked_estimator(mod, mod2, mod3, mod4, df, y, x):
+    m = H2OStackedEnsembleEstimator(metalearner_algorithm="glm", base_models=[mod, mod2, mod3, mod4])
+    out = m.train(x=x, y=y, training_frame=df)
+    return out
+
+
+def ensemble_model_performance(df):
+    out = H2OGradientBoostingEstimator.model_performance(df)
+    return out

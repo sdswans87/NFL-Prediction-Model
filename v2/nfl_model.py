@@ -4,6 +4,7 @@ Created on Mon Jan  1 05:10:30 2024
 
 @author: swan0
 """
+import h2o
 import nfl_data_py as nfl
 import time
 import warnings
@@ -315,3 +316,120 @@ class model_efficiency_data():
         self.down_pass_def = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_def, self.down_1st_run_def, 
                                                                    self.down_2nd_pass_def, self.down_2nd_run_def,
                                                                    self.down_3rd_pass_def, self.down_3rd_run_def, "defteam")
+        
+
+class ensemble_model_actual_points():
+    def __init__(self, gm_obj):
+
+        # start runtime
+        start_run = time.time()
+
+
+        # ensemble column lists
+        self.ensemble_off_columns = ['game_id','year', 'week', 'away_team', 'home_team','posteam',
+                                     'n_pass','n_rush','n_plays', 'home_final','away_final',
+                                     'total_tds','total_fgs_att','total_pat','total_effective_pts',
+                                     'total_score','pt_diff']
+        self.ensemble_def_columns = ['game_id','year', 'week', 'away_team', 'home_team','defteam',
+                                     'n_pass','n_rush','n_plays', 'home_final','away_final',
+                                     'total_tds','total_fgs_att','total_pat','total_effective_pts',
+                                     'total_score','pt_diff']
+        
+        # prep for model calculation
+        self.ensemble_offense = nfl_obj.ensemble_prep_data(gm_obj.game_efficiency_offense_total, self.ensemble_off_columns)
+        self.ensemble_defense = nfl_obj.ensemble_prep_data(gm_obj.game_efficiency_defense_total, self.ensemble_def_columns)
+
+        # ensemble offensive model on actual points 
+        h2o.init()
+        self.ensemble_offense_train = nfl_obj.ensemble_model_data(self.ensemble_offense, 0)
+        self.ensemble_offensive_test = nfl_obj.ensemble_model_data(self.ensemble_offense, 1)
+
+        # ensemble defensive model on actual points 
+        self.ensemble_defense_train = nfl_obj.ensemble_model_data(self.ensemble_defense, 0)
+        self.ensemble_defensive_test = nfl_obj.ensemble_model_data(self.ensemble_defense, 1)
+
+        # ensemble train gradient boosting
+        self.ensemble_offense_gbm = nfl_obj.ensemble_model_train_gbm(self.ensemble_offense_train, 'poss_score', 
+                                                                     set(self.ensemble_offense_train.columns) - 
+                                                                     set(['poss_score']), 5, 5)
+        self.ensemble_defense_gbm = nfl_obj.ensemble_model_train_gbm(self.ensemble_defense_train, 'score_allowed', 
+                                                                     set(self.ensemble_defense_train.columns) - 
+                                                                     set(['score_allowed']), 5, 5)
+        
+        # builds a distributed random forest on a parsed dataset, for regression or classification
+        # ensemble train random forest
+        self.ensemble_offense_rf = nfl_obj.ensemble_model_train_rf(self.ensemble_offense_train, 'poss_score', 
+                                                                   set(self.ensemble_offense_train.columns) - 
+                                                                   set(['poss_score']), 5, 5)
+        self.ensemble_defense_rf = nfl_obj.ensemble_model_train_rf(self.ensemble_defense_train, 'score_allowed', 
+                                                                   set(self.ensemble_defense_train.columns) - 
+                                                                   set(['score_allowed']), 5, 5)
+        
+        # fits a generalized linear model, specified by a response variable, a set of predictors, and a
+        # description of the error distribution.
+        # ensemble train linear regression
+        self.ensemble_offense_lr = nfl_obj.ensemble_model_train_lr(self.ensemble_offense_train, 'poss_score', 
+                                                                   set(self.ensemble_offense_train.columns) - 
+                                                                   set(['poss_score']), 5, 5)
+        self.ensemble_defense_lr = nfl_obj.ensemble_model_train_lr(self.ensemble_defense_train, 'score_allowed', 
+                                                                   set(self.ensemble_defense_train.columns) -
+                                                                   set(['score_allowed']), 5, 5)
+
+        # build a deep neural network model using cpus
+        # builds a feed-forward multilayer artificial neural network on an h2o frame
+        # ensemble train nearual net
+        self.ensemble_offense_nn = nfl_obj.ensemble_model_train_nn(self.ensemble_offense_train, 'poss_score', 
+                                                                   set(self.ensemble_offense_train.columns) - 
+                                                                   set(['poss_score']), 5, 5)
+        self.ensemble_defense_nn = nfl_obj.ensemble_model_train_nn(self.ensemble_defense_train, 'score_allowed', 
+                                                                   set(self.ensemble_defense_train.columns) - 
+                                                                   set(['score_allowed']), 5, 5)
+        
+        # builds a stacked ensemble machine learning method that uses two
+        # or more H2O learning algorithms to improve predictive performance - it is a loss-based
+        # supervised learning method that finds the optimal combination of a collection of prediction
+        # algorithms - this method supports regression and binary classification
+        # ensemble train stacked estimator using models above
+        self.ensemble_offense_stacked = nfl_obj.ensemble_model_stacked_estimator(self.ensemble_offense_lr, self.ensemble_offense_rf, 
+                                                                                 self.ensemble_offense_nn, self.ensemble_offense_gbm, 
+                                                                                 self.ensemble_offense_train, 'poss_score', 
+                                                                                 set(self.ensemble_offense_train.columns) - 
+                                                                                 set(['poss_score']))
+        self.ensemble_defense_stacked = nfl_obj.ensemble_model_stacked_estimator(self.ensemble_defense_lr, self.ensemble_defense_rf, 
+                                                                                 self.ensemble_defense_nn, self.ensemble_defense_gbm, 
+                                                                                 self.ensemble_defense_train, 'score_allowed', 
+                                                                                 set(self.ensemble_defense_train.columns) - 
+                                                                                 set(['score_allowed']))
+
+        # ensemble gbm performance
+        self.ensemble_off_gbm_test = nfl_obj.ensemble_model_performance(self.ensemble_offense_gbm)
+        self.ensemble_def_gbm_test = nfl_obj.ensemble_model_performance(self.ensemble_defense_gbm)
+
+        # ensemble random forest performance
+        self.ensemble_off_rf_test = nfl_obj.ensemble_model_performance(self.ensemble_offense_rf)
+        self.ensemble_def_rf_test = nfl_obj.ensemble_model_performance(self.ensemble_defense_rf)
+
+        # ensemble linear regression performance
+        self.ensemble_off_lr_test = nfl_obj.ensemble_model_performance(self.ensemble_offense_lr)
+        self.ensemble_def_lr_test = nfl_obj.ensemble_model_performance(self.ensemble_defense_lr)
+
+        # ensemble neural net performance
+        self.ensemble_off_nn_test = nfl_obj.ensemble_model_performance(self.ensemble_offense_nn)
+        self.ensemble_def_nn_test = nfl_obj.ensemble_model_performance(self.ensemble_defense_nn)
+
+        # ensemble stacked performance
+        self.ensemble_off_stacked_test = nfl_obj.ensemble_model_performance(self.ensemble_offense_stacked)
+        self.ensemble_def_stacked_test = nfl_obj.ensemble_model_performance(self.ensemble_defense_stacked)
+        self.ensemble_off_stacked_test.rmse()
+        self.ensemble_def_stacked_test.rmse()
+
+        # ensemble performance mins
+        print(min([self.ensemble_off_gbm_test.rmse(), self.ensemble_off_rf_test.rmse(), self.ensemble_off_lr_test.rmse(), 
+                   self.ensemble_off_nn_test.rmse()]))
+        print(min([self.ensemble_def_gbm_test.rmse(), self.ensemble_def_rf_test.rmse(), self.ensemble_def_lr_test.rmse(),
+                   self.ensemble_def_nn_test.rmse()]))
+
+        # end runtime
+        end_run = time.time()
+        end_run = (end_run - start_run)/60
+        print("ensemble model on actual points runtime: " + str(end_run) + " minutes.")
