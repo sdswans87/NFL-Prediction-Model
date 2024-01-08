@@ -607,6 +607,10 @@ class ensemble_model_effective_points():
         self.ensemble_curr_schedule = nfl_obj.ensemble_curr_schedule_data(src_obj.src_schedule_data)
 
         # ensemble prediction engine 
+        self.predict_wk_14 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 14, self.ensemble_hfa, 
+                                                         self.ensemble_power_rankings, self.ensemble_qb_update)
+        self.predict_wk_15 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 15, self.ensemble_hfa, 
+                                                         self.ensemble_power_rankings, self.ensemble_qb_update)
         self.predict_wk_16 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 16, self.ensemble_hfa, 
                                                          self.ensemble_power_rankings, self.ensemble_qb_update)
         self.predict_wk_17 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 17, self.ensemble_hfa, 
