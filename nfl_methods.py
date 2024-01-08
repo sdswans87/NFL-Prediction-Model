@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import nfl_data_py as nfl
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 
 def import_game_data(start_range, end_range):
@@ -47,6 +48,30 @@ def source_game_data(game_data, nfl_range):
     df['blow_out'] = np.where((df['qtr'] == 4) & (np.abs(df['current_score_differential']) > 13.5), 1, 0)
     df['blow_out'] = np.where((df['qtr'] > 2) & (abs(df['current_score_differential']) > 27.5), 1, df['blow_out'])
     return df
+
+
+def source_offense_data(game_data, nfl_range): 
+    off_data = source_game_data(game_data, nfl_range)
+    off_data['week'] = np.where((off_data['week'] == 1) & (off_data['season'] == 2023), 19, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 2) & (off_data['season'] == 2023), 20, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 3) & (off_data['season'] == 2023), 21, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 4) & (off_data['season'] == 2023), 22, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 5) & (off_data['season'] == 2023), 23, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 6) & (off_data['season'] == 2023), 24, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 7) & (off_data['season'] == 2023), 25, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 8) & (off_data['season'] == 2023), 26, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 9) & (off_data['season'] == 2023), 27, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 10) & (off_data['season'] == 2023), 28, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 11) & (off_data['season'] == 2023), 29, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 12) & (off_data['season'] == 2023), 30, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 13) & (off_data['season'] == 2023), 31, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 14) & (off_data['season'] == 2023), 32, off_data['week'])
+    off_data['week'] = np.where((off_data['week'] == 15) & (off_data['season'] == 2023), 33, off_data['week'])
+    off_data['season'] = 2023
+    off_data = off_data[off_data['week'] > 10]
+    off_data['week'] = off_data['week'] - 10
+    off_data['week'].value_counts()
+    return off_data
 
 
 def source_quarterback_data(quarterback_data):
@@ -436,6 +461,197 @@ def ensemble_model_stacked_estimator(mod, mod2, mod3, mod4, df, y, x):
     return out
 
 
-def ensemble_model_performance(df):
-    out = H2OGradientBoostingEstimator.model_performance(df)
+def ensemble_model_performance(h2o_df):
+    out = H2OGradientBoostingEstimator.model_performance(h2o_df)
     return out
+
+
+def ensemble_final_efficiency_data(game_data, eff_columns):
+    eff_data = ensemble_prep_data(game_data, eff_columns)
+    out = ensemble_model_data(eff_data, 2)
+    return out
+
+
+def ensemble_predictors_data(h2o_stacked, eff_data):
+    predictors = h2o_stacked.predict(eff_data)
+    out = predictors.as_data_frame()
+    return out
+
+
+def ensemble_epa_data(eff_data, predictor, field):
+    epa = pd.concat([eff_data, predictor], axis=1)
+    epa.columns.values[3] = field
+    return epa
+
+
+def ensemble_kicking_efficiency_data(game_data, side):
+    kicking_df = game_data[game_data['field_goal_result'].notna()]
+    kicking_df['exp_pts'] = kicking_df['fg_prob'] * 3
+    kicking_df['act_pts'] = np.where(kicking_df['field_goal_result'] == 'made', 3, 0)
+    kicking_df['added_pts'] = kicking_df['act_pts'] - kicking_df['exp_pts']
+    out = kicking_df.groupby(['season', side]).agg(
+        total_added_pts=('added_pts', 'sum'),
+        total_kicks=('field_goal_result', 'count'),
+        kicks_per_game=('field_goal_result', lambda x: len(x) / 17),
+        avg_kick_exp_pts=('exp_pts', 'mean'),
+        avg_pts_per_kick=('act_pts', 'mean'),
+        add_pts_per_kick=('added_pts', 'mean'),
+        add_pts_per_game=('added_pts', lambda x: sum(x) / 17)
+    ).reset_index()
+    return out
+
+
+def ensemble_starting_kicker_data(game_data):
+    kickers = game_data[game_data['field_goal_attempt'] == 1][['posteam', 'kicker_player_name', 'kicker_player_id']]
+    kickers = kickers.dropna(subset=['kicker_player_id']).drop_duplicates()
+    return kickers
+
+
+def ensemble_adjusted_points_data(epa_data, kicking_data):
+    epa_data['kick_pts_add'] = epa_data['posteam'].map(kicking_data.set_index('posteam')['add_pts_per_game'])
+    epa_data['adj_pts'] = epa_data['total_effective_pts'] + epa_data['kick_pts_add']
+    return epa_data
+
+
+def ensemble_schedule_off_adjustment(game_data):
+    sched_adj = game_data[(~game_data['epa'].isna()) & (~game_data['posteam'].isna()) & (game_data['play_type'].isin(['pass', 'run']))]
+    sched_adj = sched_adj.groupby(['game_id', 'week', 'posteam']).agg(off_epa=('epa', 'mean'), off_plays=('play_type', 'count')).reset_index()
+    sched_adj['off_epa'] = sched_adj.groupby('posteam')['off_epa'].transform(lambda x: x.rolling(window=14, min_periods=1).mean().shift())
+    sched_adj['off_plays'] = sched_adj.groupby('posteam')['off_plays'].transform(lambda x: x.rolling(window=14, min_periods=1).mean().shift())
+    sched_adj = sched_adj.sort_values('week').reset_index(drop=True)
+    return sched_adj
+
+
+def ensemble_schedule_def_adjustment(game_data):
+    sched_adj = game_data[(~game_data['epa'].isna()) & (~game_data['defteam'].isna()) & (game_data['play_type'].isin(['pass', 'run']))]
+    sched_adj = sched_adj.groupby(['game_id', 'week', 'defteam']).agg(def_epa=('epa', 'mean'), def_plays=('play_type', 'count')).reset_index()
+    sched_adj['def_epa'] = sched_adj.groupby('defteam')['def_epa'].transform(lambda x: x.rolling(window=14, min_periods=1).mean().shift())
+    sched_adj['def_plays'] = sched_adj.groupby('defteam')['def_plays'].transform(lambda x: x.rolling(window=14, min_periods=1).mean().shift())
+    sched_adj = sched_adj.sort_values('week').reset_index(drop=True)
+    return sched_adj
+
+
+def ensemble_epa_lg_avg_data(epa_data):
+    epa_lg_avg = epa_data.groupby('week').agg(league_mean=('epa', 'mean')).reset_index()
+    epa_lg_avg['league_mean'] = epa_lg_avg['league_mean'].rolling(window=14, min_periods=1).mean().shift()
+    return epa_lg_avg
+
+
+def ensemble_epa_off_avg_data(off_epa, league_epa):
+    epa_off = pd.merge(off_epa, league_epa, on='week', how='left').tail(32)
+    epa_off['adj_off_epa'] = epa_off['off_epa'] - epa_off['league_mean']
+    epa_off['adj_off_pts'] = epa_off['adj_off_epa'] * epa_off['off_plays']
+    epa_off = epa_off[['posteam', 'adj_off_epa', 'adj_off_pts']]
+    epa_off.columns = ['team', 'adj_off_epa', 'adj_off_pts']
+    return epa_off
+
+
+def ensemble_epa_def_avg_data(def_epa, league_epa):
+    epa_def = pd.merge(def_epa, league_epa, on='week', how='left').tail(32)
+    epa_def['adj_def_epa'] = epa_def['def_epa'] - epa_def['league_mean']
+    epa_def['adj_def_pts'] = epa_def['adj_def_epa'] * epa_def['def_plays']
+    epa_def = epa_def[['defteam', 'adj_def_epa', 'adj_def_pts']]
+    epa_def.columns = ['team', 'adj_def_epa', 'adj_def_pts']
+    return epa_def
+
+
+def ensemble_sched_diff_off_data(off_data, epa_data):
+    adj_off = off_data[['posteam', 'game_id']].copy()
+    adj_off[['year', 'week', 'away', 'home']] = adj_off['game_id'].str.split('_', expand=True)
+    adj_off['opposition'] = np.where(adj_off['posteam'] == adj_off['away'], adj_off['home'], adj_off['away'])
+    adj_off = adj_off.drop(columns=['year', 'week', 'away', 'home'])
+    adj_off['adjust'] = adj_off['opposition'].map(epa_data.set_index('team')['adj_off_pts'])
+    adj_off = adj_off.rename(columns={'posteam': 'team'})
+    adj_off = adj_off.groupby('team').agg(off_vs_avg=('adjust', 'mean'))
+    return adj_off
+
+
+def ensemble_sched_diff_def_data(def_data, epa_data):
+    adj_def = def_data[['defteam', 'game_id']].copy()
+    adj_def[['year', 'week', 'away', 'home']] = adj_def['game_id'].str.split('_', expand=True)
+    adj_def['opposition'] = np.where(adj_def['defteam'] == adj_def['away'], adj_def['home'], adj_def['away'])
+    adj_def = adj_def.drop(columns=['year', 'week', 'away', 'home'])
+    adj_def['adjust'] = adj_def['opposition'].map(epa_data.set_index('team')['adj_def_pts'])
+    adj_def = adj_def.rename(columns={'defteam': 'team'})
+    adj_def = adj_def.groupby('team').agg(def_vs_avg=('adjust', 'mean'))
+    return adj_def
+
+
+def ensemble_weighted_offense_data(final_off, final_def_adj):
+    final_def_adj = final_def_adj.reset_index()
+    weighted_offense = final_off.groupby('posteam').apply(lambda x: x.rolling(window=10, on='predicted_points', win_type='boxcar').mean().iloc[-1])
+    weighted_offense = weighted_offense.reset_index()[['posteam', 'predicted_points']]
+    weighted_offense['sched_adj'] = weighted_offense['posteam'].map(final_def_adj.set_index('team')['def_vs_avg'])
+    weighted_offense['adj_off'] = weighted_offense['predicted_points'] - weighted_offense['sched_adj']
+    return weighted_offense
+    
+
+def ensemble_weighted_defense_data(final_def, final_off_adj):
+    final_off_adj = final_off_adj.reset_index()
+    weighted_defense = final_def.groupby('defteam').apply(lambda x: x.rolling(window=10, on='predicted_points_conceded', win_type='boxcar').mean().iloc[-1])
+    weighted_defense = weighted_defense.reset_index()[['defteam', 'predicted_points_conceded']]
+    weighted_defense['sched_adj'] = weighted_defense['defteam'].map(final_off_adj.set_index('team')['off_vs_avg'])
+    weighted_defense['adj_def'] = weighted_defense['predicted_points_conceded'] - weighted_defense['sched_adj']
+    return weighted_defense
+
+
+def ensemble_qb_update_data(qb_data, weighted_off):
+    adj_qb_remaining = sum(range(1, 18))
+    adj_qb_gone = sum(range(9, 18))
+    adj_qb_ratio = (adj_qb_remaining - adj_qb_gone) / adj_qb_remaining
+    qb_data['sched_adj'] = qb_data['team'].map(weighted_off.set_index('posteam')['sched_adj'])
+    qb_data['offense_update'] = qb_data.apply(lambda row: float(row['wt_avg'] * adj_qb_ratio) 
+                                                            - (float(row['wt_avg_team']) - (row['sched_adj'] * adj_qb_ratio)), axis=1)
+    qb_no_change = ['BUF', 'SF', 'NE', 'CIN', 'DAL', 'DET', 'JAX', 'KC', 'LAC', 'MIN',
+                    'SEA', 'NYJ','CAR', 'ARI', 'PHI', 'WAS', 'GB', 'ATL', 'NO', 'LV', 
+                    'CHI', 'CLE', 'HOU', 'LA', 'MIA', 'TEN', 'NYG', 'PIT', 'TB', 'DEN']
+    qb_data['offense_update'] = qb_data.apply(lambda row: 0 if row['team'] in qb_no_change else row['offense_update'], axis=1)
+    return qb_data
+
+
+def ensemble_power_rankings_data(qb_data, weighted_off, weighted_def):
+    qb_update = qb_data.drop_duplicates(subset=['team'])
+    power_rank = weighted_off[['posteam']].copy()
+    power_rank.columns = ['team']
+    power_rank['adj_off'] = power_rank['team'].map(weighted_off.set_index('posteam')['adj_off'])
+    power_rank['adj_def'] = power_rank['team'].map(weighted_def.set_index('defteam')['adj_def'])
+    power_rank['pts_vs_avg'] = power_rank['adj_off'] - power_rank['adj_def']
+    power_rank['qb_adj'] = power_rank['team'].map(qb_update.set_index('team')['offense_update'])
+    power_rank['final_ranking'] = power_rank['pts_vs_avg'] + power_rank['qb_adj']
+    power_rank.to_csv('power_rank.csv', index=False)
+    return power_rank
+
+
+def ensemble_hfa_data(sched_data):
+    nfl_hfa = sched_data[sched_data['season'] != 2020]
+    nfl_hfa = nfl_hfa[nfl_hfa['season'] != 2023] # remove
+    nfl_hfa = nfl_hfa[nfl_hfa['game_type'] == 'REG']
+    nfl_hfa = nfl_hfa.drop(['away_moneyline', 'home_moneyline', 'away_spread_odds', 
+                            'home_spread_odds', 'old_game_id', 'gsis', 'nfl_detail_id', 
+                            'pfr', 'pff', 'espn', 'over_odds', 'under_odds'], axis=1)
+    home_spread = nfl_hfa.groupby('season').agg(home_line=('spread_line', 'mean'), result_avg=('result', 'mean')).reset_index()
+    line_spread = sns.lmplot(data=home_spread, y='home_line', x='season', ci=None)
+    line_spread.set_axis_labels('Season', 'Home Line')
+    line_result = sns.lmplot(data=home_spread, y='result_avg', x='season', ci=None)
+    line_result.set_axis_labels('Season', 'Result Average')
+    hfa_adj = home_spread['home_line'].tail(1).values[0]
+    return hfa_adj
+
+
+def ensemble_curr_schedule_data(nfl_schedules):
+    sched_2023 = nfl_schedules[nfl_schedules['season'] == 2023]
+    return sched_2023
+
+
+def predict_odds_engine(df, wk, hfa, power_rank, qb_update_2023):
+    qb_update_2023 = qb_update_2023.drop_duplicates(subset=['team'])
+    df = df[df['week'] == wk]
+    df = df[['game_id', 'gameday', 'weekday', 'home_team', 'away_team', 'away_rest', 'home_rest', 'spread_line', 'total_line']]
+    df['home_ranking'] = df['home_team'].map(power_rank.set_index('team')['final_ranking'])
+    df['away_ranking'] = df['away_team'].map(power_rank.set_index('team')['final_ranking'])
+    df['starting_home_qb'] = df['home_team'].map(qb_update_2023.set_index('team')['passer_player_name'])
+    df['starting_away_qb'] = df['away_team'].map(qb_update_2023.set_index('team')['passer_player_name'])
+    df['unregressed'] = df['home_ranking'] - df['away_ranking'] + hfa
+    df['regressed_number'] = 0.5 * df['unregressed'] + 0.5 * df['spread_line']
+    df.to_csv(rf'week_{wk}.csv', index=False)
+    return df
