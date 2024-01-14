@@ -47,6 +47,16 @@ def source_game_data(game_data, nfl_range):
     df['current_score_differential'] = df['posteam_score'] - df['defteam_score']
     df['blow_out'] = np.where((df['qtr'] == 4) & (np.abs(df['current_score_differential']) > 13.5), 1, 0)
     df['blow_out'] = np.where((df['qtr'] > 2) & (abs(df['current_score_differential']) > 27.5), 1, df['blow_out'])
+    df['nans_3_qtr'] = np.where((df['qtr'] == 3) & df['current_score_differential'].isnull(), 1, 0)
+    df['nans_4_qtr'] = np.where((df['qtr'] == 4) & df['current_score_differential'].isnull(), 1, 0)
+    df['nans_5_qtr'] = np.where((df['qtr'] == 5) & df['current_score_differential'].isnull(), 1, 0)
+    df = df[df['nans_3_qtr'] == 0]
+    df = df[df['nans_4_qtr'] == 0]
+    df = df[df['nans_5_qtr'] == 0]
+    df = df[df['blow_out'] == 0]
+    df = df.drop('nans_3_qtr', axis=1)
+    df = df.drop('nans_4_qtr', axis=1)
+    df = df.drop('nans_5_qtr', axis=1)
     return df
 
 
@@ -65,8 +75,8 @@ def source_offense_data(game_data, nfl_range):
     off_data['week'] = np.where((off_data['week'] == 11) & (off_data['season'] == 2023), 29, off_data['week'])
     off_data['week'] = np.where((off_data['week'] == 12) & (off_data['season'] == 2023), 30, off_data['week'])
     off_data['week'] = np.where((off_data['week'] == 13) & (off_data['season'] == 2023), 31, off_data['week'])
-    off_data['week'] = np.where((off_data['week'] == 14) & (off_data['season'] == 2023), 32, off_data['week'])
-    off_data['week'] = np.where((off_data['week'] == 15) & (off_data['season'] == 2023), 33, off_data['week'])
+    # off_data['week'] = np.where((off_data['week'] == 14) & (off_data['season'] == 2023), 32, off_data['week'])
+    # off_data['week'] = np.where((off_data['week'] == 15) & (off_data['season'] == 2023), 33, off_data['week'])
     off_data['season'] = 2023
     off_data = off_data[off_data['week'] > 10]
     off_data['week'] = off_data['week'] - 10
@@ -398,12 +408,10 @@ def game_efficiency_down_data(game_data, dwn, pass_run, side):
     return down_eff
 
 
-def game_efficiency_all_down_data(df1, df2, df3, df4, df5, df6, side):
+def game_efficiency_all_down_data(df1, df2, df3, df4, side):
     all_down_eff = df1.merge(df2, on = ['game_id',side], how = 'left') 
     all_down_eff = all_down_eff.merge(df3, on = ['game_id',side], how = 'left') 
     all_down_eff = all_down_eff.merge(df4, on = ['game_id',side], how = 'left') 
-    all_down_eff = all_down_eff.merge(df5, on = ['game_id',side], how = 'left') 
-    all_down_eff = all_down_eff.merge(df6, on = ['game_id',side], how = 'left') 
     return all_down_eff
 
 
@@ -538,7 +546,8 @@ def ensemble_epa_lg_avg_data(epa_data):
 
 
 def ensemble_epa_off_avg_data(off_epa, league_epa):
-    epa_off = pd.merge(off_epa, league_epa, on='week', how='left').tail(32)
+    epa_off = pd.merge(off_epa, league_epa, on='week', how='left')
+    epa_off = epa_off[epa_off['week'] == 20]
     epa_off['adj_off_epa'] = epa_off['off_epa'] - epa_off['league_mean']
     epa_off['adj_off_pts'] = epa_off['adj_off_epa'] * epa_off['off_plays']
     epa_off = epa_off[['posteam', 'adj_off_epa', 'adj_off_pts']]
@@ -547,7 +556,8 @@ def ensemble_epa_off_avg_data(off_epa, league_epa):
 
 
 def ensemble_epa_def_avg_data(def_epa, league_epa):
-    epa_def = pd.merge(def_epa, league_epa, on='week', how='left').tail(32)
+    epa_def = pd.merge(def_epa, league_epa, on='week', how='left')
+    epa_def = epa_def[epa_def['week'] == 20]
     epa_def['adj_def_epa'] = epa_def['def_epa'] - epa_def['league_mean']
     epa_def['adj_def_pts'] = epa_def['adj_def_epa'] * epa_def['def_plays']
     epa_def = epa_def[['defteam', 'adj_def_epa', 'adj_def_pts']]

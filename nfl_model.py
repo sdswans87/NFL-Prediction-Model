@@ -7,6 +7,7 @@ Created on Mon Jan  1 05:10:30 2024
 import h2o
 import nfl_data_py as nfl
 import numpy as np
+import pandas as pd
 from sklearn.metrics import mean_squared_error
 import time
 import warnings
@@ -22,9 +23,9 @@ class import_data():
         start_run = time.time()
 
         # import data
-        self.imp_game_data = nfl_obj.import_game_data(2005, 2024)
-        self.imp_schedule_data = nfl_obj.import_schedule_data(2005, 2024)
-        self.imp_rookie_data = nfl_obj.import_rookie_data(2005)
+        self.imp_game_data = nfl_obj.import_game_data(2002, 2024)
+        self.imp_schedule_data = nfl_obj.import_schedule_data(2002, 2024)
+        self.imp_rookie_data = nfl_obj.import_rookie_data(2002)
         self.imp_quarterback_data = nfl_obj.import_quarterback_data()
         
         # end runtime
@@ -40,11 +41,11 @@ class source_data():
         start_run = time.time()
 
         # source game datadata
-        self.src_game_data = nfl_obj.source_game_data(imp_obj.imp_game_data, range(2016,2024))
+        self.src_game_data = nfl_obj.source_game_data(imp_obj.imp_game_data, range(2016,2022))
 
         # source quarterback data
         self.src_quarterback_data = nfl_obj.source_quarterback_data(imp_obj.imp_quarterback_data)
-        self.src_passing_data = nfl_obj.source_game_data(imp_obj.imp_game_data, range(2021,2024))
+        self.src_passing_data = nfl_obj.source_game_data(imp_obj.imp_game_data, range(2021,2023))
         self.src_offense_data = nfl_obj.source_offense_data(imp_obj.imp_game_data, range(2022,2024))
     
         # source rookie data 
@@ -94,8 +95,8 @@ class epa_data():
         # epa passing value data
         self.epa_passing_value = nfl_obj.epa_passing_value_data(src_obj.src_passing_data)
 
-        # epa team data
-        self.epa_team_qb = nfl_obj.epa_quarterback_data(self.epa_passing_value[1],  [2022,2023])
+        # # epa team data
+        # self.epa_team_qb = nfl_obj.epa_quarterback_data(self.epa_passing_value[1],  [2022,2023])
 
         # end runtime
         end_run = time.time()
@@ -130,17 +131,18 @@ class quarterback_data():
         # start runtime
         start_run = time.time()
 
-        # quarterback starter data
-        self.qb_starters = nfl_obj.qb_starters_data(src_obj.src_game_data, season=2023, week=16)
+        # # quarterback starter data
+        # self.qb_starters = nfl_obj.qb_starters_data(src_obj.src_game_data, season=2023, week=16)
 
         # quarterback efficiency rankings data
         self.qb_rankings = nfl_obj.qb_rankings_data(epa_obj.epa_passing_value)
 
-        # quarterback starter rankings data
-        self.qb_starter_rankings = nfl_obj.qb_starter_rankings_data(self.qb_starters, self.qb_rankings)
+        # # quarterback starter rankings data
+        # self.qb_starter_rankings = nfl_obj.qb_starter_rankings_data(self.qb_starters, self.qb_rankings)
 
-        # quarterback rankings adjusments (add next years rookie data here)
-        self.qb_rankings_adj = nfl_obj.qb_rankings_adj_data(epa_obj.epa_team_qb, self.qb_starter_rankings, rk_obj.rookie_mean)
+        # # quarterback rankings adjusments (add next years rookie data here)
+        # self.qb_rankings_adj = nfl_obj.qb_rankings_adj_data(epa_obj.epa_team_qb, self.qb_starter_rankings, rk_obj.rookie_mean)
+        self.qb_rankings_adj = pd.read_csv(r"C:\Users\swan0\Desktop\sdswans\python\NFL-Prediction-Model\qb_update_2023.csv")
 
         # end runtime
         end_run = time.time()
@@ -235,11 +237,9 @@ class game_efficiency_data():
 
         # game efficiency all down data
         self.down_pass_off = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_off, self.down_1st_run_off, 
-                                                                   self.down_2nd_pass_off, self.down_2nd_run_off,
-                                                                   self.down_3rd_pass_off, self.down_3rd_run_off, "posteam")
+                                                                   self.down_2nd_pass_off, self.down_2nd_run_off, "posteam")
         self.down_pass_def = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_def, self.down_1st_run_def, 
-                                                                   self.down_2nd_pass_def, self.down_2nd_run_def,
-                                                                   self.down_3rd_pass_def, self.down_3rd_run_def, "defteam")
+                                                                   self.down_2nd_pass_def, self.down_2nd_run_def, "defteam")
         
 
 class model_efficiency_data():
@@ -314,11 +314,9 @@ class model_efficiency_data():
 
         # model efficiency all down data
         self.down_pass_off = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_off, self.down_1st_run_off, 
-                                                                   self.down_2nd_pass_off, self.down_2nd_run_off,
-                                                                   self.down_3rd_pass_off, self.down_3rd_run_off, "posteam")
+                                                                   self.down_2nd_pass_off, self.down_2nd_run_off, "posteam")
         self.down_pass_def = nfl_obj.game_efficiency_all_down_data(self.down_1st_pass_def, self.down_1st_run_def, 
-                                                                   self.down_2nd_pass_def, self.down_2nd_run_def,
-                                                                   self.down_3rd_pass_def, self.down_3rd_run_def, "defteam")
+                                                                   self.down_2nd_pass_def, self.down_2nd_run_def, "defteam")
         
 
 class ensemble_model_actual_points():
@@ -616,6 +614,8 @@ class ensemble_model_effective_points():
         self.predict_wk_17 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 17, self.ensemble_hfa, 
                                                          self.ensemble_power_rankings, self.ensemble_qb_update)
         self.predict_wk_18 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 18, self.ensemble_hfa, 
+                                                         self.ensemble_power_rankings, self.ensemble_qb_update)
+        self.predict_wk_19 = nfl_obj.predict_odds_engine(self.ensemble_curr_schedule, 19, self.ensemble_hfa, 
                                                          self.ensemble_power_rankings, self.ensemble_qb_update)
 
         # end runtime

@@ -1,0 +1,13 @@
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(ggeasy)
+library(h2o)
+library(lookup)
+library(nflverse)
+library(pracma)
+library(purrr)
+library(tidyr)
+library(tidyverse)
+setwd("C:/Users/swan0/Desktop/sdswans/python/NFL-Prediction-Model")
+
