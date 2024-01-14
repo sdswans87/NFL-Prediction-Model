@@ -5,7 +5,6 @@ Created on Mon Jan  1 05:10:30 2024
 @author: swan0
 """
 import h2o
-import nfl_data_py as nfl
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error
@@ -142,7 +141,7 @@ class quarterback_data():
 
         # # quarterback rankings adjusments (add next years rookie data here)
         # self.qb_rankings_adj = nfl_obj.qb_rankings_adj_data(epa_obj.epa_team_qb, self.qb_starter_rankings, rk_obj.rookie_mean)
-        self.qb_rankings_adj = pd.read_csv(r"C:\Users\swan0\Desktop\sdswans\python\NFL-Prediction-Model\qb_update_2023.csv")
+        self.qb_rankings_adj = pd.read_csv(r"C:\Users\swan0\Desktop\sdswans\python\NFL-Prediction-Model\qb_adjustment.csv")
 
         # end runtime
         end_run = time.time()
